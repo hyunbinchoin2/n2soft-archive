@@ -1,8 +1,9 @@
+// src/pages/DocumentDetailPage.jsx
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
-  getDocuments, updateDocument, deleteDocument,
+  getDocument, updateDocument, deleteDocument,
   incrementViewCount, addComment, getComments,
   deleteComment, CATEGORIES
 } from '../services/archiveService'
@@ -12,12 +13,12 @@ export default function DocumentDetailPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
 
-  const [doc, setDoc]         = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState(false)
+  const [doc, setDoc]           = useState(null)
+  const [loading, setLoading]   = useState(true)
+  const [editing, setEditing]   = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [comments, setComments] = useState([])
-  const [commentText, setCommentText] = useState('')
+  const [commentText, setCommentText]       = useState('')
   const [submittingComment, setSubmittingComment] = useState(false)
   const [form, setForm] = useState({
     title: '', description: '', category: '', tags: ''
@@ -25,10 +26,9 @@ export default function DocumentDetailPage() {
 
   useEffect(() => {
     Promise.all([
-      getDocuments(),
+      getDocument(id),
       getComments(id)
-    ]).then(([docs, cmts]) => {
-      const found = docs.find(d => d.id === id)
+    ]).then(([found, cmts]) => {
       setDoc(found || null)
       setComments(cmts)
       if (found) {
@@ -48,7 +48,11 @@ export default function DocumentDetailPage() {
       ...form,
       tags: form.tags.split(',').map(t => t.trim()).filter(Boolean)
     })
-    setDoc(prev => ({ ...prev, ...form, tags: form.tags.split(',').map(t => t.trim()).filter(Boolean) }))
+    setDoc(prev => ({
+      ...prev,
+      ...form,
+      tags: form.tags.split(',').map(t => t.trim()).filter(Boolean)
+    }))
     setEditing(false)
   }
 
@@ -108,19 +112,34 @@ export default function DocumentDetailPage() {
         {editing ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 4 }}>문서 수정</h2>
-            <input value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
-              placeholder="제목" style={{ width: '100%', padding: '10px 14px' }} />
-            <textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-              placeholder="설명" rows={3} style={{ width: '100%', padding: '10px 14px', resize: 'vertical' }} />
+            <input
+              value={form.title}
+              onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
+              placeholder="제목"
+              style={{ width: '100%', padding: '10px 14px' }}
+            />
+            <textarea
+              value={form.description}
+              onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+              placeholder="설명" rows={3}
+              style={{ width: '100%', padding: '10px 14px', resize: 'vertical' }}
+            />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-              <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
-                style={{ padding: '10px 14px' }}>
+              <select
+                value={form.category}
+                onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
+                style={{ padding: '10px 14px' }}
+              >
                 {CATEGORIES.filter(c => c !== '전체').map(c => (
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>
-              <input value={form.tags} onChange={e => setForm(p => ({ ...p, tags: e.target.value }))}
-                placeholder="태그 (쉼표로 구분)" style={{ padding: '10px 14px' }} />
+              <input
+                value={form.tags}
+                onChange={e => setForm(p => ({ ...p, tags: e.target.value }))}
+                placeholder="태그 (쉼표로 구분)"
+                style={{ padding: '10px 14px' }}
+              />
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button onClick={() => setEditing(false)} className="btn btn-ghost">취소</button>
@@ -136,9 +155,13 @@ export default function DocumentDetailPage() {
                   <span className="badge badge-blue">{doc.fileType?.toUpperCase()}</span>
                   <span className="badge badge-blue">{doc.category}</span>
                 </div>
-                <h1 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: 10, lineHeight: 1.3 }}>{doc.title}</h1>
+                <h1 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: 10, lineHeight: 1.3 }}>
+                  {doc.title}
+                </h1>
                 {doc.description && (
-                  <p style={{ color: 'var(--text2)', lineHeight: 1.6, fontSize: '0.9rem' }}>{doc.description}</p>
+                  <p style={{ color: 'var(--text2)', lineHeight: 1.6, fontSize: '0.9rem' }}>
+                    {doc.description}
+                  </p>
                 )}
                 {doc.tags?.length > 0 && (
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12 }}>
@@ -150,7 +173,10 @@ export default function DocumentDetailPage() {
 
             <hr className="divider" />
 
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            <div style={{
+              display: 'flex', alignItems: 'center',
+              justifyContent: 'space-between', flexWrap: 'wrap', gap: 12
+            }}>
               <div style={{ display: 'flex', gap: 16, fontSize: '0.8rem', color: 'var(--text3)', flexWrap: 'wrap' }}>
                 <span>👁 {doc.viewCount || 0}회</span>
                 <span>📦 {(doc.fileSize / 1024 / 1024).toFixed(2)} MB</span>
@@ -158,12 +184,17 @@ export default function DocumentDetailPage() {
               </div>
               {isOwner && (
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => setEditing(true)} className="btn btn-ghost" style={{ fontSize: '0.8rem', padding: '6px 14px' }}>
-                    ✏️ 수정
-                  </button>
-                  <button onClick={handleDelete} disabled={deleting} className="btn btn-danger" style={{ fontSize: '0.8rem', padding: '6px 14px' }}>
-                    🗑 삭제
-                  </button>
+                  <button
+                    onClick={() => setEditing(true)}
+                    className="btn btn-ghost"
+                    style={{ fontSize: '0.8rem', padding: '6px 14px' }}
+                  >✏️ 수정</button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="btn btn-danger"
+                    style={{ fontSize: '0.8rem', padding: '6px 14px' }}
+                  >🗑 삭제</button>
                 </div>
               )}
             </div>
@@ -172,8 +203,13 @@ export default function DocumentDetailPage() {
       </div>
 
       {/* 다운로드 */}
-      <a href={doc.downloadURL} target="_blank" rel="noopener noreferrer"
-        className="btn btn-primary" style={{ display: 'inline-flex', marginBottom: 24, textDecoration: 'none' }}>
+      <a
+        href={doc.downloadURL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="btn btn-primary"
+        style={{ display: 'inline-flex', marginBottom: 24, textDecoration: 'none' }}
+      >
         ⬇️ 파일 다운로드
       </a>
 
@@ -199,7 +235,9 @@ export default function DocumentDetailPage() {
                   hour: '2-digit', minute: '2-digit'
                 }) : ''}
               </div>
-              <span className="badge badge-blue">{h.action === 'upload' ? '최초 업로드' : h.action}</span>
+              <span className="badge badge-blue">
+                {h.action === 'upload' ? '최초 업로드' : h.action}
+              </span>
             </div>
           ))}
         </div>
@@ -228,7 +266,10 @@ export default function DocumentDetailPage() {
               }}>
                 <Avatar user={c.author} size={32} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{
+                    display: 'flex', justifyContent: 'space-between',
+                    alignItems: 'center', flexWrap: 'wrap', gap: 8
+                  }}>
                     <div>
                       <span style={{ fontWeight: 500, fontSize: '0.875rem' }}>{c.author?.name}</span>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text3)', marginLeft: 8 }}>
@@ -236,13 +277,15 @@ export default function DocumentDetailPage() {
                       </span>
                     </div>
                     {c.author?.uid === user?.uid && (
-                      <button onClick={() => handleDeleteComment(c.id)}
-                        style={{ fontSize: '0.75rem', color: 'var(--red)', background: 'none', cursor: 'pointer' }}>
-                        삭제
-                      </button>
+                      <button
+                        onClick={() => handleDeleteComment(c.id)}
+                        style={{ fontSize: '0.75rem', color: 'var(--red)', background: 'none', cursor: 'pointer' }}
+                      >삭제</button>
                     )}
                   </div>
-                  <p style={{ fontSize: '0.875rem', color: 'var(--text)', marginTop: 4, lineHeight: 1.6 }}>{c.body}</p>
+                  <p style={{ fontSize: '0.875rem', color: 'var(--text)', marginTop: 4, lineHeight: 1.6 }}>
+                    {c.body}
+                  </p>
                 </div>
               </div>
             ))}
@@ -253,13 +296,19 @@ export default function DocumentDetailPage() {
         <form onSubmit={handleAddComment} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
           <Avatar user={{ photoURL: user?.photoURL, name: user?.displayName || user?.email }} size={32} />
           <div style={{ flex: 1 }}>
-            <textarea value={commentText} onChange={e => setCommentText(e.target.value)}
+            <textarea
+              value={commentText}
+              onChange={e => setCommentText(e.target.value)}
               placeholder="댓글을 입력하세요..." rows={2}
-              style={{ width: '100%', padding: '10px 14px', resize: 'none', marginBottom: 8 }} />
+              style={{ width: '100%', padding: '10px 14px', resize: 'none', marginBottom: 8 }}
+            />
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button type="submit" className="btn btn-primary"
+              <button
+                type="submit"
+                className="btn btn-primary"
                 disabled={submittingComment || !commentText.trim()}
-                style={{ fontSize: '0.85rem', padding: '7px 16px' }}>
+                style={{ fontSize: '0.85rem', padding: '7px 16px' }}
+              >
                 {submittingComment ? '등록 중...' : '댓글 등록'}
               </button>
             </div>

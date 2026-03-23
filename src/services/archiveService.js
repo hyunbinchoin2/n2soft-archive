@@ -25,12 +25,11 @@ import {
 import { db, storage } from './firebase'
 
 // ─── 컬렉션 이름 ────────────────────────────────────────────
-const DOCS_COL = 'documents'   // 업로드된 파일/문서
-const QA_COL   = 'questions'   // 질문 & 답변
+const DOCS_COL = 'documents'
+const QA_COL   = 'questions'
 
 // ─── 문서 업로드 ─────────────────────────────────────────────
 export async function uploadDocument(file, metadata, user, onProgress) {
-  // 1. Storage에 파일 업로드
   const ext = file.name.split('.').pop()
   const storagePath = `documents/${Date.now()}_${file.name}`
   const storageRef = ref(storage, storagePath)
@@ -51,7 +50,6 @@ export async function uploadDocument(file, metadata, user, onProgress) {
     )
   })
 
-  // 2. Firestore에 메타데이터 저장 (업로드 이력 포함)
   const docData = {
     title: metadata.title || file.name,
     description: metadata.description || '',
@@ -98,14 +96,18 @@ export async function getDocuments(category = null) {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }))
 }
 
-// ─── 검색 (Firestore 전체 fetch 후 클라이언트 필터) ──────────
-// 규모가 커지면 Algolia 또는 Firebase Extensions(Full-text search)로 교체 권장
-// 검색어를 토큰으로 분리 (공백, 언더스코어, 하이픈 기준)
+// ─── 단일 문서 조회 ───────────────────────────────────────────
+export async function getDocument(docId) {
+  const snap = await getDoc(doc(db, DOCS_COL, docId))
+  if (!snap.exists()) return null
+  return { id: snap.id, ...snap.data() }
+}
+
+// ─── 검색 ────────────────────────────────────────────────────
 function tokenize(str) {
   return str.toLowerCase().replace(/[_\-\.]/g, ' ').split(/\s+/).filter(Boolean)
 }
 
-// 텍스트가 검색 토큰을 하나라도 포함하는지 확인
 function matchesTokens(text, tokens) {
   if (!text) return false
   const normalized = text.toLowerCase().replace(/[_\-\.]/g, ' ')
@@ -122,7 +124,7 @@ export async function searchDocuments(keyword) {
     getDocs(query(collection(db, QA_COL), orderBy('createdAt', 'desc')))
   ])
 
-const docs = docSnap.docs
+  const docs = docSnap.docs
     .map(d => ({ id: d.id, type: 'document', ...d.data() }))
     .filter(d =>
       matchesTokens(d.title, tokens) ||
@@ -140,6 +142,7 @@ const docs = docSnap.docs
       d.tags?.some(t => matchesTokens(t, tokens)) ||
       d.answers?.some(a => matchesTokens(a.body, tokens))
     )
+
   return [...docs, ...qas]
 }
 
@@ -165,7 +168,7 @@ export async function createQuestion(data, user) {
     },
     answers: [],
     viewCount: 0,
-    status: 'open', // open | resolved
+    status: 'open',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   }
@@ -209,7 +212,7 @@ export async function addAnswer(questionId, body, user) {
   return answer
 }
 
-// ─── 답변 채택 (질문 작성자만) ────────────────────────────────
+// ─── 답변 채택 ────────────────────────────────────────────────
 export async function acceptAnswer(questionId, answerId) {
   const qSnap = await getDoc(doc(db, QA_COL, questionId))
   if (!qSnap.exists()) return
@@ -228,8 +231,10 @@ export async function acceptAnswer(questionId, answerId) {
 
 // ─── 카테고리 목록 ───────────────────────────────────────────
 export const CATEGORIES = [
-  '전체', '엔투소프트', '이기종 전문', '저축은행', '공공마이데이터/스크래핑', '대출 정책', '개발', '디자인', '기획', '인사/총무', '기타'
+  '전체', '엔투소프트', '이기종 전문', '저축은행', '공공마이데이터/스크래핑',
+  '대출 정책', '개발', '디자인', '기획', '인사/총무', '기타'
 ]
+
 // ─── 문서 수정 ───────────────────────────────────────────────
 export async function updateDocument(docId, metadata) {
   await updateDoc(doc(db, DOCS_COL, docId), {
@@ -243,14 +248,12 @@ export async function updateDocument(docId, metadata) {
 
 // ─── 문서 삭제 ───────────────────────────────────────────────
 export async function deleteDocument(docId, storagePath) {
-  // Storage 파일 삭제
   try {
     const fileRef = ref(storage, storagePath)
     await deleteObject(fileRef)
   } catch (e) {
-    console.warn('Storage 파일 삭제 실패 (이미 없을 수 있음)', e)
+    console.warn('Storage 파일 삭제 실패', e)
   }
-  // Firestore 문서 삭제
   await deleteDoc(doc(db, DOCS_COL, docId))
 }
 
@@ -270,14 +273,13 @@ export async function deleteQuestion(questionId) {
   await deleteDoc(doc(db, QA_COL, questionId))
 }
 
-// ─── 댓글 컬렉션 ─────────────────────────────────────────────
+// ─── 댓글 ────────────────────────────────────────────────────
 const COMMENTS_COL = 'comments'
 
-// 댓글 추가
 export async function addComment(targetId, targetType, body, user) {
   const comment = {
     targetId,
-    targetType, // 'document' | 'question'
+    targetType,
     body,
     author: {
       uid: user.uid,
@@ -291,7 +293,6 @@ export async function addComment(targetId, targetType, body, user) {
   return { id: ref.id, ...comment }
 }
 
-// 댓글 목록 조회
 export async function getComments(targetId) {
   const snap = await getDocs(
     query(
@@ -303,7 +304,6 @@ export async function getComments(targetId) {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }))
 }
 
-// 댓글 삭제
 export async function deleteComment(commentId) {
   await deleteDoc(doc(db, COMMENTS_COL, commentId))
 }
