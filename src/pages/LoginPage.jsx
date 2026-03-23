@@ -73,7 +73,7 @@ export default function LoginPage() {
         </h1>
         <p style={{ color: 'var(--text3)', fontSize: '0.9rem', marginBottom: 36, lineHeight: 1.6 }}>
           내부 임직원 전용 지식 아카이브입니다.<br />
-          n2soft.co.kr 계정으로 로그인하세요.
+          등록된 Google 계정으로 로그인하세요.
         </p>
 
         {authError && (
@@ -126,7 +126,7 @@ export default function LoginPage() {
           lineHeight: 1.6
         }}>
           🔒 <strong style={{ color: 'var(--text2)' }}>접근 제한</strong><br />
-          @n2soft.co.kr 도메인 계정만 로그인할 수 있습니다.
+          관리자에게 등록된 Google 계정만 로그인할 수 있습니다.
         </div>
       </div>
     </div>
