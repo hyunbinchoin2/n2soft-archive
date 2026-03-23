@@ -2,7 +2,7 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { uploadDocument, CATEGORIES } from '../services/archiveService'
+import { uploadDocument, uploadTextOnly, CATEGORIES } from '../services/archiveService'
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 
@@ -45,7 +45,6 @@ export default function UploadPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!file) { setError('파일을 선택해주세요'); return }
     if (!form.title.trim()) { setError('제목을 입력해주세요'); return }
 
     setUploading(true)
@@ -58,12 +57,19 @@ export default function UploadPage() {
         category: form.category,
         tags: form.tags.split(',').map(t => t.trim()).filter(Boolean)
       }
-      const doc = await uploadDocument(file, metadata, user, setProgress)
+
+      let result
+      if (file) {
+        result = await uploadDocument(file, metadata, user, setProgress)
+      } else {
+        result = await uploadTextOnly(metadata, user)
+      }
+
       setSuccess(true)
-      setTimeout(() => navigate(`/documents/${doc.id}`), 1500)
+      setTimeout(() => navigate(`/documents/${result.id}`), 1500)
     } catch (err) {
       console.error(err)
-      setError('업로드 중 오류가 발생했습니다. 다시 시도해주세요.')
+      setError('등록 중 오류가 발생했습니다. 다시 시도해주세요.')
     } finally {
       setUploading(false)
     }
@@ -73,20 +79,20 @@ export default function UploadPage() {
     return (
       <div className="page-container" style={{ textAlign: 'center', paddingTop: 80 }}>
         <div style={{ fontSize: '4rem', marginBottom: 20 }}>✅</div>
-        <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: 8 }}>업로드 완료!</h2>
-        <p style={{ color: 'var(--text3)' }}>문서 페이지로 이동합니다...</p>
+        <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: 8 }}>등록 완료!</h2>
+        <p style={{ color: 'var(--text3)' }}>페이지로 이동합니다...</p>
       </div>
     )
   }
 
   return (
     <div className="page-container" style={{ maxWidth: 680 }}>
-      <h1 style={{ fontSize: '1.6rem', fontWeight: 700, marginBottom: 6 }}>문서 업로드</h1>
+      <h1 style={{ fontSize: '1.6rem', fontWeight: 700, marginBottom: 6 }}>문서 등록</h1>
       <p style={{ color: 'var(--text3)', marginBottom: 32, fontSize: '0.9rem' }}>
-        아카이브에 문서를 추가합니다. 업로드자 정보는 자동으로 기록됩니다.
+        파일을 첨부하거나 글만 등록할 수 있습니다. 등록자 정보는 자동으로 기록됩니다.
       </p>
 
-      {/* Uploader info */}
+      {/* 업로더 정보 */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
         padding: '12px 16px',
@@ -106,13 +112,14 @@ export default function UploadPage() {
         }
         <div>
           <div style={{ fontWeight: 500, fontSize: '0.875rem' }}>{user?.displayName || user?.email}</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>업로드 이력에 자동 기록됩니다</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>등록 이력에 자동 기록됩니다</div>
         </div>
         <span className="badge badge-green" style={{ marginLeft: 'auto' }}>인증된 사용자</span>
       </div>
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        {/* Drop zone */}
+
+        {/* 드롭존 (선택사항) */}
         <div
           onDragOver={e => { e.preventDefault(); setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
@@ -148,7 +155,7 @@ export default function UploadPage() {
                 onClick={e => { e.stopPropagation(); setFile(null) }}
                 style={{
                   marginTop: 10, fontSize: '0.8rem', color: 'var(--red)',
-                  background: 'none', textDecoration: 'underline'
+                  background: 'none', textDecoration: 'underline', cursor: 'pointer'
                 }}
               >파일 변경</button>
             </>
@@ -156,16 +163,19 @@ export default function UploadPage() {
             <>
               <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>📂</div>
               <div style={{ fontWeight: 500, color: 'var(--text)', marginBottom: 4 }}>
-                파일을 드래그하거나 클릭하여 선택
+                파일을 드래그하거나 클릭하여 선택 <span style={{ color: 'var(--text3)', fontWeight: 400 }}>(선택사항)</span>
               </div>
               <div style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>
                 PDF, 이미지, Word, Excel, PowerPoint 등 최대 50MB
+              </div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--accent2)', marginTop: 6 }}>
+                파일 없이 글만 등록할 수도 있습니다
               </div>
             </>
           )}
         </div>
 
-        {/* Title */}
+        {/* 제목 */}
         <div>
           <label style={{ display: 'block', fontWeight: 500, marginBottom: 6, fontSize: '0.875rem' }}>
             제목 <span style={{ color: 'var(--red)' }}>*</span>
@@ -174,27 +184,27 @@ export default function UploadPage() {
             type="text"
             value={form.title}
             onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
-            placeholder="문서 제목"
+            placeholder="제목을 입력하세요"
             style={{ width: '100%', padding: '10px 14px' }}
             required
           />
         </div>
 
-        {/* Description */}
+        {/* 설명 */}
         <div>
           <label style={{ display: 'block', fontWeight: 500, marginBottom: 6, fontSize: '0.875rem' }}>
-            설명
+            내용
           </label>
           <textarea
             value={form.description}
             onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-            placeholder="문서에 대한 간단한 설명 (선택)"
-            rows={3}
+            placeholder="내용을 입력하세요 (선택)"
+            rows={5}
             style={{ width: '100%', padding: '10px 14px', resize: 'vertical' }}
           />
         </div>
 
-        {/* Category + Tags row */}
+        {/* 카테고리 + 태그 */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
           <div>
             <label style={{ display: 'block', fontWeight: 500, marginBottom: 6, fontSize: '0.875rem' }}>
@@ -224,7 +234,16 @@ export default function UploadPage() {
           </div>
         </div>
 
-        {/* Error */}
+        {/* 태그 미리보기 */}
+        {form.tags && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {form.tags.split(',').map(t => t.trim()).filter(Boolean).map(t => (
+              <span key={t} className="tag">#{t}</span>
+            ))}
+          </div>
+        )}
+
+        {/* 에러 */}
         {error && (
           <div style={{
             background: 'var(--red-bg)',
@@ -236,8 +255,8 @@ export default function UploadPage() {
           }}>{error}</div>
         )}
 
-        {/* Progress */}
-        {uploading && (
+        {/* 진행률 */}
+        {uploading && file && (
           <div>
             <div style={{
               display: 'flex', justifyContent: 'space-between',
@@ -252,7 +271,7 @@ export default function UploadPage() {
           </div>
         )}
 
-        {/* Buttons */}
+        {/* 버튼 */}
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button
             type="button"
@@ -263,11 +282,11 @@ export default function UploadPage() {
           <button
             type="submit"
             className="btn btn-primary"
-            disabled={uploading || !file}
+            disabled={uploading}
           >
             {uploading ? (
-              <><div className="spinner" style={{ width: 16, height: 16, borderTopColor: '#fff' }} />업로드 중...</>
-            ) : '업로드'}
+              <><div className="spinner" style={{ width: 16, height: 16, borderTopColor: '#fff' }} />등록 중...</>
+            ) : file ? '업로드' : '글 등록'}
           </button>
         </div>
       </form>
@@ -278,8 +297,8 @@ export default function UploadPage() {
 function getFileEmoji(type) {
   const map = {
     pdf: '📄', doc: '📝', docx: '📝', xls: '📊', xlsx: '📊',
-    ppt: '📋', pptx: '📋', png: '🖼️', jpg: '🖼️', jpeg: '🖼️', gif: '🖼️',
-    mp4: '🎬', mp3: '🎵', zip: '📦', txt: '📃'
+    ppt: '📋', pptx: '📋', png: '🖼️', jpg: '🖼️', jpeg: '🖼️',
+    gif: '🖼️', mp4: '🎬', mp3: '🎵', zip: '📦', txt: '📃'
   }
   return map[type?.toLowerCase()] || '📁'
 }
