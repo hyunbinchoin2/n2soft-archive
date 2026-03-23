@@ -7,6 +7,7 @@ import {
   getDocs,
   getDoc,
   updateDoc,
+  deleteDoc,
   doc,
   query,
   orderBy,
@@ -15,6 +16,7 @@ import {
   increment,
   arrayUnion
 } from 'firebase/firestore'
+import { deleteObject } from 'firebase/storage'
 import {
   ref,
   uploadBytesResumable,
@@ -228,3 +230,80 @@ export async function acceptAnswer(questionId, answerId) {
 export const CATEGORIES = [
   '전체', '엔투소프트', '이기종 전문', '저축은행', '공공마이데이터/스크래핑', '대출 정책', '개발', '디자인', '기획', '인사/총무', '기타'
 ]
+// ─── 문서 수정 ───────────────────────────────────────────────
+export async function updateDocument(docId, metadata) {
+  await updateDoc(doc(db, DOCS_COL, docId), {
+    title: metadata.title,
+    description: metadata.description,
+    category: metadata.category,
+    tags: metadata.tags,
+    updatedAt: serverTimestamp()
+  })
+}
+
+// ─── 문서 삭제 ───────────────────────────────────────────────
+export async function deleteDocument(docId, storagePath) {
+  // Storage 파일 삭제
+  try {
+    const fileRef = ref(storage, storagePath)
+    await deleteObject(fileRef)
+  } catch (e) {
+    console.warn('Storage 파일 삭제 실패 (이미 없을 수 있음)', e)
+  }
+  // Firestore 문서 삭제
+  await deleteDoc(doc(db, DOCS_COL, docId))
+}
+
+// ─── 질문 수정 ───────────────────────────────────────────────
+export async function updateQuestion(questionId, data) {
+  await updateDoc(doc(db, QA_COL, questionId), {
+    title: data.title,
+    body: data.body,
+    category: data.category,
+    tags: data.tags,
+    updatedAt: serverTimestamp()
+  })
+}
+
+// ─── 질문 삭제 ───────────────────────────────────────────────
+export async function deleteQuestion(questionId) {
+  await deleteDoc(doc(db, QA_COL, questionId))
+}
+
+// ─── 댓글 컬렉션 ─────────────────────────────────────────────
+const COMMENTS_COL = 'comments'
+
+// 댓글 추가
+export async function addComment(targetId, targetType, body, user) {
+  const comment = {
+    targetId,
+    targetType, // 'document' | 'question'
+    body,
+    author: {
+      uid: user.uid,
+      name: user.displayName || user.email,
+      email: user.email,
+      photoURL: user.photoURL || null
+    },
+    createdAt: serverTimestamp()
+  }
+  const ref = await addDoc(collection(db, COMMENTS_COL), comment)
+  return { id: ref.id, ...comment }
+}
+
+// 댓글 목록 조회
+export async function getComments(targetId) {
+  const snap = await getDocs(
+    query(
+      collection(db, COMMENTS_COL),
+      where('targetId', '==', targetId),
+      orderBy('createdAt', 'asc')
+    )
+  )
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+}
+
+// 댓글 삭제
+export async function deleteComment(commentId) {
+  await deleteDoc(doc(db, COMMENTS_COL, commentId))
+}
