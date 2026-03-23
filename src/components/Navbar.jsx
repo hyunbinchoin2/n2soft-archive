@@ -38,7 +38,24 @@ export default function Navbar() {
         />
       </form>
 
-      <div className="nav-links">
+      <div className="nav-links" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <button
+          onClick={() => navigate('/search?q=')}
+          style={{
+            display: 'none',
+            padding: '6px 10px',
+            borderRadius: 8,
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            color: 'var(--text2)',
+            cursor: 'pointer'
+          }}
+          className="mobile-search-btn"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </button>
         <NavLink
           to="/"
           end

@@ -82,7 +82,7 @@ export default function SearchResultsPage() {
       {!loading && q && (
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          marginBottom: 20, flexWrap: 'wrap', gap: 12
+          marginBottom: 20, flexWrap: 'wrap', gap: 12, flexDirection: 'column'
         }}>
           <p style={{ color: 'var(--text3)', fontSize: '0.875rem' }}>
             <strong style={{ color: 'var(--text)' }}>"{q}"</strong> 검색 결과{' '}

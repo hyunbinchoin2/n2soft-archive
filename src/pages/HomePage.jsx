@@ -157,7 +157,7 @@ export default function HomePage() {
             ))}
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24 }}>
             {/* Recent Documents */}
             <section>
               <SectionHeader title="최근 업로드" href="/search?q=" />
@@ -187,9 +187,9 @@ export default function HomePage() {
         {/* Quick Actions */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: 16,
-          marginTop: 40
+          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+          gap: 12,
+          marginTop: 32
         }}>
           <QuickAction
             icon="📤"

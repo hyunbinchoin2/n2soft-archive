@@ -309,3 +309,45 @@ input:focus, textarea:focus, select:focus {
   border-radius: 6px;
   animation: pulse 1.5s ease infinite;
 }
+/* ─── 반응형 (모바일) ─── */
+@media (max-width: 768px) {
+
+  /* 네비게이션 */
+  .nav {
+    padding: 0 16px;
+    gap: 12px;
+    flex-wrap: nowrap;
+  }
+  .nav-search {
+    display: none;
+  }
+  .nav-logo {
+    font-size: 0.95rem;
+  }
+  .nav-link {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+  }
+
+  /* 페이지 컨테이너 */
+  .page-container {
+    padding: 20px 16px;
+  }
+
+  /* 카드 */
+  .card {
+    padding: 16px;
+  }
+
+  /* 버튼 */
+  .btn {
+    padding: 9px 16px;
+    font-size: 0.85rem;
+  }
+}
+@media (max-width: 768px) {
+  .mobile-search-btn {
+    display: flex !important;
+    align-items: center;
+  }
+}
