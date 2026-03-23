@@ -98,33 +98,46 @@ export async function getDocuments(category = null) {
 
 // ─── 검색 (Firestore 전체 fetch 후 클라이언트 필터) ──────────
 // 규모가 커지면 Algolia 또는 Firebase Extensions(Full-text search)로 교체 권장
+// 검색어를 토큰으로 분리 (공백, 언더스코어, 하이픈 기준)
+function tokenize(str) {
+  return str.toLowerCase().replace(/[_\-\.]/g, ' ').split(/\s+/).filter(Boolean)
+}
+
+// 텍스트가 검색 토큰을 하나라도 포함하는지 확인
+function matchesTokens(text, tokens) {
+  if (!text) return false
+  const normalized = text.toLowerCase().replace(/[_\-\.]/g, ' ')
+  return tokens.some(token => normalized.includes(token))
+}
+
 export async function searchDocuments(keyword) {
   const kw = keyword.toLowerCase().trim()
   if (!kw) return []
+  const tokens = tokenize(kw)
 
   const [docSnap, qaSnap] = await Promise.all([
     getDocs(query(collection(db, DOCS_COL), orderBy('createdAt', 'desc'))),
     getDocs(query(collection(db, QA_COL), orderBy('createdAt', 'desc')))
   ])
 
-  const docs = docSnap.docs
+const docs = docSnap.docs
     .map(d => ({ id: d.id, type: 'document', ...d.data() }))
     .filter(d =>
-      d.title?.toLowerCase().includes(kw) ||
-      d.description?.toLowerCase().includes(kw) ||
-      d.tags?.some(t => t.toLowerCase().includes(kw)) ||
-      d.category?.toLowerCase().includes(kw)
+      matchesTokens(d.title, tokens) ||
+      matchesTokens(d.description, tokens) ||
+      matchesTokens(d.category, tokens) ||
+      matchesTokens(d.fileName, tokens) ||
+      d.tags?.some(t => matchesTokens(t, tokens))
     )
 
   const qas = qaSnap.docs
     .map(d => ({ id: d.id, type: 'question', ...d.data() }))
     .filter(d =>
-      d.title?.toLowerCase().includes(kw) ||
-      d.body?.toLowerCase().includes(kw) ||
-      d.tags?.some(t => t.toLowerCase().includes(kw)) ||
-      d.answers?.some(a => a.body?.toLowerCase().includes(kw))
+      matchesTokens(d.title, tokens) ||
+      matchesTokens(d.body, tokens) ||
+      d.tags?.some(t => matchesTokens(t, tokens)) ||
+      d.answers?.some(a => matchesTokens(a.body, tokens))
     )
-
   return [...docs, ...qas]
 }
 
