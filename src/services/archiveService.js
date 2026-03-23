@@ -16,11 +16,11 @@ import {
   increment,
   arrayUnion
 } from 'firebase/firestore'
-import { deleteObject } from 'firebase/storage'
 import {
   ref,
   uploadBytesResumable,
-  getDownloadURL
+  getDownloadURL,
+  deleteObject
 } from 'firebase/storage'
 import { db, storage } from './firebase'
 
