@@ -5,16 +5,20 @@ import { getDocuments, CATEGORIES } from '../services/archiveService'
 
 export default function DocumentsPage() {
   const navigate = useNavigate()
-  const [docs, setDocs]         = useState([])
+  const [allDocs, setAllDocs]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [category, setCategory] = useState('전체')
 
+  // 전체를 한 번만 가져오고 클라이언트에서 필터링
   useEffect(() => {
-    setLoading(true)
-    getDocuments(category === '전체' ? null : category)
-      .then(setDocs)
+    getDocuments()
+      .then(setAllDocs)
       .finally(() => setLoading(false))
-  }, [category])
+  }, [])
+
+  const docs = category === '전체'
+    ? allDocs
+    : allDocs.filter(d => d.category === category)
 
   return (
     <div className="page-container">
@@ -22,7 +26,10 @@ export default function DocumentsPage() {
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: '1.6rem', fontWeight: 700, marginBottom: 4 }}>전체 문서</h1>
         <p style={{ color: 'var(--text3)', fontSize: '0.9rem' }}>
-          총 {docs.length}개의 문서
+          {category === '전체'
+            ? `총 ${allDocs.length}개의 문서`
+            : `'${category}' 카테고리 ${docs.length}개`
+          }
         </p>
       </div>
 
@@ -52,10 +59,7 @@ export default function DocumentsPage() {
           ))}
         </div>
       ) : docs.length === 0 ? (
-        <div style={{
-          textAlign: 'center', padding: '60px 24px',
-          color: 'var(--text3)'
-        }}>
+        <div style={{ textAlign: 'center', padding: '60px 24px', color: 'var(--text3)' }}>
           <div style={{ fontSize: '3rem', marginBottom: 16 }}>📂</div>
           <p style={{ fontSize: '1rem', color: 'var(--text2)' }}>
             {category === '전체' ? '아직 등록된 문서가 없습니다' : `'${category}' 카테고리에 문서가 없습니다`}
