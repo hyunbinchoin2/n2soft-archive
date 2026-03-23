@@ -212,7 +212,7 @@ export default function UploadPage() {
           </div>
           <div>
             <label style={{ display: 'block', fontWeight: 500, marginBottom: 6, fontSize: '0.875rem' }}>
-              태그 <span style={{ color: 'var(--text3)', fontWeight: 400' }}>(쉼표로 구분)</span>
+              태그 <span style={{ color: 'var(--text3)', fontWeight: 400 }}>(쉼표로 구분)</span>
             </label>
             <input
               type="text"
