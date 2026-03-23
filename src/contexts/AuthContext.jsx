@@ -1,4 +1,3 @@
-// src/contexts/AuthContext.jsx
 import { createContext, useContext, useEffect, useState } from 'react'
 import {
   signInWithPopup,
@@ -6,10 +5,10 @@ import {
   onAuthStateChanged
 } from 'firebase/auth'
 import { auth, googleProvider } from '../services/firebase'
+import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { db } from '../services/firebase'
 
 const AuthContext = createContext(null)
-
-const ALLOWED_DOMAIN = 'n2soft.co.kr'
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -17,17 +16,16 @@ export function AuthProvider({ children }) {
   const [authError, setAuthError] = useState(null)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        const email = currentUser.email || ''
-        if (email.endsWith(`@${ALLOWED_DOMAIN}`)) {
+        const allowed = await isAllowedUser(currentUser.email)
+        if (allowed) {
           setUser(currentUser)
           setAuthError(null)
         } else {
-          // 허용되지 않은 도메인 → 강제 로그아웃
-          signOut(auth)
+          await signOut(auth)
           setUser(null)
-          setAuthError(`N2SOFT 임직원(@${ALLOWED_DOMAIN}) 계정만 접근 가능합니다.`)
+          setAuthError('접근 권한이 없습니다. 관리자에게 문의하세요.')
         }
       } else {
         setUser(null)
@@ -37,14 +35,23 @@ export function AuthProvider({ children }) {
     return unsubscribe
   }, [])
 
+  const isAllowedUser = async (email) => {
+    try {
+      const snap = await getDoc(doc(db, 'allowedUsers', email))
+      return snap.exists()
+    } catch {
+      return false
+    }
+  }
+
   const loginWithGoogle = async () => {
     setAuthError(null)
     try {
       const result = await signInWithPopup(auth, googleProvider)
-      const email = result.user.email || ''
-      if (!email.endsWith(`@${ALLOWED_DOMAIN}`)) {
+      const allowed = await isAllowedUser(result.user.email)
+      if (!allowed) {
         await signOut(auth)
-        setAuthError(`N2SOFT 임직원(@${ALLOWED_DOMAIN}) 계정만 접근 가능합니다.`)
+        setAuthError('접근 권한이 없습니다. 관리자에게 문의하세요.')
         return false
       }
       return true
@@ -62,11 +69,8 @@ export function AuthProvider({ children }) {
   }
 
   const value = {
-    user,
-    loading,
-    authError,
-    loginWithGoogle,
-    logout,
+    user, loading, authError,
+    loginWithGoogle, logout,
     isAuthenticated: !!user
   }
 

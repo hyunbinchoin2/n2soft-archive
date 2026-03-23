@@ -23,9 +23,5 @@ export const db = getFirestore(app)
 export const storage = getStorage(app)
 export const googleProvider = new GoogleAuthProvider()
 
-// N2SOFT 도메인 제한 설정
-googleProvider.setCustomParameters({
-  hd: 'n2soft.co.kr' // 이 도메인의 Google Workspace 계정만 허용
-})
 
 export default app
