@@ -7,10 +7,10 @@ import { getDocuments, getQuestions, CATEGORIES } from '../services/archiveServi
 export default function HomePage() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [query, setQuery] = useState('')
+  const [query, setQuery]       = useState('')
   const [recentDocs, setRecentDocs] = useState([])
   const [recentQA, setRecentQA]     = useState([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading]   = useState(true)
 
   useEffect(() => {
     Promise.all([getDocuments(), getQuestions()])
@@ -34,12 +34,9 @@ export default function HomePage() {
     <div style={{ minHeight: 'calc(100vh - 60px)' }}>
       {/* ── Hero Search Section ── */}
       <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '80px 24px 60px',
-        textAlign: 'center'
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        padding: '80px 24px 60px', textAlign: 'center'
       }}>
         <p style={{
           fontSize: '0.85rem', color: 'var(--text3)',
@@ -51,30 +48,22 @@ export default function HomePage() {
 
         <h1 style={{
           fontSize: 'clamp(2rem, 5vw, 3.5rem)',
-          fontWeight: 800,
-          color: 'var(--text)',
-          letterSpacing: '-0.04em',
-          marginBottom: 40,
-          lineHeight: 1.1
+          fontWeight: 800, color: 'var(--text)',
+          letterSpacing: '-0.04em', marginBottom: 40, lineHeight: 1.1
         }}>
           N2SOFT<br/>
           <span style={{
             background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent'
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'
           }}>Knowledge Archive</span>
         </h1>
 
-        {/* Search Bar */}
+        {/* 검색창 */}
         <form onSubmit={handleSearch} style={{ width: '100%', maxWidth: 640 }}>
           <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            background: 'var(--bg2)',
-            border: '1px solid var(--border2)',
-            borderRadius: 100,
-            padding: '6px 6px 6px 24px',
-            gap: 8,
+            display: 'flex', alignItems: 'center',
+            background: 'var(--bg2)', border: '1px solid var(--border2)',
+            borderRadius: 100, padding: '6px 6px 6px 24px', gap: 8,
             boxShadow: '0 8px 40px rgba(0,0,0,0.3)',
             transition: 'border-color 0.2s, box-shadow 0.2s'
           }}
@@ -93,14 +82,12 @@ export default function HomePage() {
               </svg>
             </span>
             <input
-              type="text"
-              value={query}
+              type="text" value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="문서, Q&A, 태그 검색..."
               style={{
                 flex: 1, border: 'none', background: 'transparent',
-                fontSize: '1.05rem', padding: '10px 4px',
-                color: 'var(--text)'
+                fontSize: '1.05rem', padding: '10px 4px', color: 'var(--text)'
               }}
               autoFocus
             />
@@ -108,30 +95,21 @@ export default function HomePage() {
               type="submit"
               className="btn btn-primary"
               style={{ borderRadius: 100, padding: '10px 24px', fontWeight: 600, fontSize: '0.9rem' }}
-            >
-              검색
-            </button>
+            >검색</button>
           </div>
         </form>
 
-        {/* Quick category filters */}
-        <div style={{
-          display: 'flex', flexWrap: 'wrap', gap: 8,
-          justifyContent: 'center', marginTop: 20
-        }}>
+        {/* 카테고리 필터 */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginTop: 20 }}>
           {CATEGORIES.filter(c => c !== '전체').map(cat => (
             <button
               key={cat}
               onClick={() => navigate(`/search?q=${encodeURIComponent(cat)}`)}
               style={{
-                padding: '5px 14px',
-                borderRadius: 100,
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                color: 'var(--text2)',
-                fontSize: '0.8rem',
-                cursor: 'pointer',
-                transition: 'all 0.15s'
+                padding: '5px 14px', borderRadius: 100,
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                color: 'var(--text2)', fontSize: '0.8rem',
+                cursor: 'pointer', transition: 'all 0.15s'
               }}
               onMouseEnter={e => {
                 e.currentTarget.style.background = 'var(--accent-bg)'
@@ -148,61 +126,52 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ── Recent Content ── */}
+      {/* ── 최근 콘텐츠 ── */}
       <div className="page-container" style={{ paddingTop: 0 }}>
         {loading ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
             {[...Array(4)].map((_, i) => (
               <div key={i} className="skeleton" style={{ height: 100 }} />
             ))}
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24 }}>
-            {/* Recent Documents */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 32 }}>
+            {/* 최근 문서 */}
             <section>
-              <SectionHeader title="최근 업로드" href="/search?q=" />
+              <SectionHeader title="최근 업로드" href="/documents" />
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {recentDocs.length === 0 ? (
-                  <EmptyState text="아직 문서가 없습니다" />
-                ) : recentDocs.map(doc => (
-                  <DocCard key={doc.id} doc={doc} navigate={navigate} />
-                ))}
+                {recentDocs.length === 0
+                  ? <EmptyState text="아직 문서가 없습니다" />
+                  : recentDocs.map(doc => (
+                    <DocCard key={doc.id} doc={doc} navigate={navigate} />
+                  ))
+                }
               </div>
             </section>
 
-            {/* Recent Q&A */}
+            {/* 최근 Q&A */}
             <section>
               <SectionHeader title="최근 Q&A" href="/qa" />
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {recentQA.length === 0 ? (
-                  <EmptyState text="아직 질문이 없습니다" />
-                ) : recentQA.map(q => (
-                  <QACard key={q.id} qa={q} navigate={navigate} />
-                ))}
+                {recentQA.length === 0
+                  ? <EmptyState text="아직 질문이 없습니다" />
+                  : recentQA.map(q => (
+                    <QACard key={q.id} qa={q} navigate={navigate} />
+                  ))
+                }
               </div>
             </section>
           </div>
         )}
 
-        {/* Quick Actions */}
+        {/* 빠른 액션 */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-          gap: 12,
-          marginTop: 32
+          gap: 12, marginTop: 32
         }}>
-          <QuickAction
-            icon="📤"
-            title="문서 업로드"
-            desc="PDF, 이미지, 문서 파일 업로드"
-            onClick={() => navigate('/upload')}
-          />
-          <QuickAction
-            icon="💬"
-            title="질문하기"
-            desc="동료에게 질문하고 아카이브 확장"
-            onClick={() => navigate('/qa/ask')}
-          />
+          <QuickAction icon="📤" title="문서 등록" desc="파일 업로드 또는 글 작성" onClick={() => navigate('/upload')} />
+          <QuickAction icon="💬" title="질문하기" desc="동료에게 질문하고 아카이브 확장" onClick={() => navigate('/qa/ask')} />
         </div>
       </div>
     </div>
@@ -212,10 +181,7 @@ export default function HomePage() {
 function SectionHeader({ title, href }) {
   const navigate = useNavigate()
   return (
-    <div style={{
-      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      marginBottom: 12
-    }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
       <h2 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text)' }}>{title}</h2>
       <button
         onClick={() => navigate(href)}
@@ -231,14 +197,10 @@ function DocCard({ doc, navigate }) {
       onClick={() => navigate(`/documents/${doc.id}`)}
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
-        padding: '12px 14px',
-        background: 'var(--bg2)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius)',
-        textAlign: 'left',
-        cursor: 'pointer',
-        transition: 'all 0.15s',
-        width: '100%'
+        padding: '12px 14px', background: 'var(--bg2)',
+        border: '1px solid var(--border)', borderRadius: 'var(--radius)',
+        textAlign: 'left', cursor: 'pointer',
+        transition: 'all 0.15s', width: '100%'
       }}
       onMouseEnter={e => {
         e.currentTarget.style.borderColor = 'var(--border2)'
@@ -259,7 +221,9 @@ function DocCard({ doc, navigate }) {
           {doc.uploader?.name} · {doc.category}
         </div>
       </div>
-      <span className="badge badge-blue">{doc.fileType?.toUpperCase()}</span>
+      {doc.fileType && doc.fileType !== 'text' && (
+        <span className="badge badge-blue">{doc.fileType.toUpperCase()}</span>
+      )}
     </button>
   )
 }
@@ -271,14 +235,10 @@ function QACard({ qa, navigate }) {
       onClick={() => navigate(`/qa/${qa.id}`)}
       style={{
         display: 'flex', alignItems: 'flex-start', gap: 12,
-        padding: '12px 14px',
-        background: 'var(--bg2)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius)',
-        textAlign: 'left',
-        cursor: 'pointer',
-        transition: 'all 0.15s',
-        width: '100%'
+        padding: '12px 14px', background: 'var(--bg2)',
+        border: '1px solid var(--border)', borderRadius: 'var(--radius)',
+        textAlign: 'left', cursor: 'pointer',
+        transition: 'all 0.15s', width: '100%'
       }}
       onMouseEnter={e => {
         e.currentTarget.style.borderColor = 'var(--border2)'
@@ -321,7 +281,8 @@ function QuickAction({ icon, title, desc, onClick }) {
       className="card"
       style={{
         display: 'flex', alignItems: 'center', gap: 16,
-        cursor: 'pointer', textAlign: 'left', border: '1px solid var(--border)',
+        cursor: 'pointer', textAlign: 'left',
+        border: '1px solid var(--border)',
         transition: 'all 0.2s', width: '100%'
       }}
       onMouseEnter={e => {
@@ -349,9 +310,7 @@ function EmptyState({ text }) {
       color: 'var(--text3)', fontSize: '0.85rem',
       background: 'var(--surface)', borderRadius: 'var(--radius)',
       border: '1px dashed var(--border)'
-    }}>
-      {text}
-    </div>
+    }}>{text}</div>
   )
 }
 
@@ -359,7 +318,7 @@ function getFileEmoji(type) {
   const map = {
     pdf: '📄', doc: '📝', docx: '📝', xls: '📊', xlsx: '📊',
     ppt: '📋', pptx: '📋', png: '🖼️', jpg: '🖼️', jpeg: '🖼️',
-    gif: '🖼️', mp4: '🎬', mp3: '🎵', zip: '📦', txt: '📃'
+    gif: '🖼️', mp4: '🎬', mp3: '🎵', zip: '📦', txt: '📃', text: '📝'
   }
   return map[type?.toLowerCase()] || '📁'
 }

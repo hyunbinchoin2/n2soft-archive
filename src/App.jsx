@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage'
 import HomePage from './pages/HomePage'
 import SearchResultsPage from './pages/SearchResultsPage'
 import UploadPage from './pages/UploadPage'
+import DocumentsPage from './pages/DocumentsPage'
 import QAPage from './pages/QAPage'
 import QuestionDetailPage from './pages/QuestionDetailPage'
 import AskQuestionPage from './pages/AskQuestionPage'
@@ -48,11 +49,14 @@ export default function App() {
         <Route path="/search" element={
           <ProtectedRoute><SearchResultsPage /></ProtectedRoute>
         } />
-        <Route path="/upload" element={
-          <ProtectedRoute><UploadPage /></ProtectedRoute>
+        <Route path="/documents" element={
+          <ProtectedRoute><DocumentsPage /></ProtectedRoute>
         } />
         <Route path="/documents/:id" element={
           <ProtectedRoute><DocumentDetailPage /></ProtectedRoute>
+        } />
+        <Route path="/upload" element={
+          <ProtectedRoute><UploadPage /></ProtectedRoute>
         } />
         <Route path="/qa" element={
           <ProtectedRoute><QAPage /></ProtectedRoute>
