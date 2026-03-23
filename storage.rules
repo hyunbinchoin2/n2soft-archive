@@ -1,0 +1,36 @@
+// storage.rules
+// Firebase Console > Storage > Rules 에 이 내용을 붙여넣으세요
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── 헬퍼 함수 ──────────────────────────────────────────
+    function isN2SoftEmployee() {
+      return request.auth != null
+        && request.auth.token.email.matches('.*@n2soft\\.co\\.kr');
+    }
+
+    // 파일 크기 50MB 제한
+    function isValidFileSize() {
+      return request.resource.size <= 50 * 1024 * 1024;
+    }
+
+    // ── documents 폴더 ──────────────────────────────────────
+    match /documents/{fileName} {
+      // 읽기(다운로드): N2SOFT 직원만 허용
+      allow read: if isN2SoftEmployee();
+
+      // 쓰기(업로드): N2SOFT 직원만, 50MB 이하
+      allow write: if isN2SoftEmployee() && isValidFileSize();
+
+      // 삭제: N2SOFT 직원만 허용 (더 세밀한 제어는 Cloud Functions 권장)
+      allow delete: if isN2SoftEmployee();
+    }
+
+    // ── 그 외 모든 경로: 거부 ───────────────────────────────
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

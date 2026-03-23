@@ -1,0 +1,66 @@
+// firestore.rules
+// Firebase Console > Firestore > Rules 에 이 내용을 붙여넣으세요
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── 헬퍼 함수 ──────────────────────────────────────────
+    // n2soft.co.kr 도메인 계정인지 검증
+    function isN2SoftEmployee() {
+      return request.auth != null
+        && request.auth.token.email.matches('.*@n2soft\\.co\\.kr');
+    }
+
+    // 요청 필드가 유효한지 검증
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // ── documents 컬렉션 ────────────────────────────────────
+    match /documents/{docId} {
+      // 조회: 인증된 N2SOFT 직원 전체 허용
+      allow read: if isN2SoftEmployee();
+
+      // 생성: 인증된 직원만 가능, 업로더 UID는 본인이어야 함
+      allow create: if isN2SoftEmployee()
+        && hasRequiredFields(['title', 'uploader', 'downloadURL', 'createdAt'])
+        && request.resource.data.uploader.uid == request.auth.uid;
+
+      // 수정: 업로더 본인 또는 관리자만 가능
+      allow update: if isN2SoftEmployee()
+        && (resource.data.uploader.uid == request.auth.uid
+            || request.auth.token.email == 'admin@n2soft.co.kr');
+
+      // 삭제: 업로더 본인 또는 관리자만 가능
+      allow delete: if isN2SoftEmployee()
+        && (resource.data.uploader.uid == request.auth.uid
+            || request.auth.token.email == 'admin@n2soft.co.kr');
+    }
+
+    // ── questions 컬렉션 ────────────────────────────────────
+    match /questions/{questionId} {
+      // 조회: 인증된 N2SOFT 직원 전체 허용
+      allow read: if isN2SoftEmployee();
+
+      // 생성: 인증된 직원만, 작성자 UID는 본인이어야 함
+      allow create: if isN2SoftEmployee()
+        && hasRequiredFields(['title', 'body', 'author', 'createdAt'])
+        && request.resource.data.author.uid == request.auth.uid;
+
+      // 수정: 인증된 직원 누구나 (답변 추가, 채택 등)
+      // 실제 운영 시 더 세밀한 검증 추가 가능
+      allow update: if isN2SoftEmployee();
+
+      // 삭제: 작성자 본인 또는 관리자만
+      allow delete: if isN2SoftEmployee()
+        && (resource.data.author.uid == request.auth.uid
+            || request.auth.token.email == 'admin@n2soft.co.kr');
+    }
+
+    // ── 그 외 모든 경로: 거부 ───────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
