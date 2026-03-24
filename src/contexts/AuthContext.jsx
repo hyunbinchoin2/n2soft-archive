@@ -1,20 +1,57 @@
+// src/contexts/AuthContext.jsx
 import { createContext, useContext, useEffect, useState } from 'react'
 import {
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   onAuthStateChanged
 } from 'firebase/auth'
 import { auth, googleProvider } from '../services/firebase'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../services/firebase'
 
 const AuthContext = createContext(null)
 
+// 모바일 환경 감지
+function isMobile() {
+  return /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent)
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [user, setUser]         = useState(null)
+  const [loading, setLoading]   = useState(true)
   const [authError, setAuthError] = useState(null)
 
+  const isAllowedUser = async (email) => {
+    try {
+      const snap = await getDoc(doc(db, 'allowedUsers', email))
+      return snap.exists()
+    } catch {
+      return false
+    }
+  }
+
+  // 리다이렉트 결과 처리 (모바일 로그인 후 돌아왔을 때)
+  useEffect(() => {
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result?.user) {
+          const allowed = await isAllowedUser(result.user.email)
+          if (!allowed) {
+            await signOut(auth)
+            setAuthError('접근 권한이 없습니다. 관리자에게 문의하세요.')
+          }
+        }
+      })
+      .catch((err) => {
+        if (err.code !== 'auth/popup-closed-by-user') {
+          console.error('Redirect result error:', err)
+        }
+      })
+  }, [])
+
+  // 인증 상태 감지
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
@@ -35,24 +72,22 @@ export function AuthProvider({ children }) {
     return unsubscribe
   }, [])
 
-  const isAllowedUser = async (email) => {
-    try {
-      const snap = await getDoc(doc(db, 'allowedUsers', email))
-      return snap.exists()
-    } catch {
-      return false
-    }
-  }
-
   const loginWithGoogle = async () => {
     setAuthError(null)
     try {
-      const result = await signInWithPopup(auth, googleProvider)
-      const allowed = await isAllowedUser(result.user.email)
-      if (!allowed) {
-        await signOut(auth)
-        setAuthError('접근 권한이 없습니다. 관리자에게 문의하세요.')
-        return false
+      if (isMobile()) {
+        // 모바일: 리다이렉트 방식
+        await signInWithRedirect(auth, googleProvider)
+        // 이후 페이지가 리로드되고 getRedirectResult에서 처리됨
+      } else {
+        // PC: 팝업 방식
+        const result = await signInWithPopup(auth, googleProvider)
+        const allowed = await isAllowedUser(result.user.email)
+        if (!allowed) {
+          await signOut(auth)
+          setAuthError('접근 권한이 없습니다. 관리자에게 문의하세요.')
+          return false
+        }
       }
       return true
     } catch (err) {
