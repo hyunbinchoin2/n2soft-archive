@@ -3,13 +3,32 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
+// Google 로그인이 차단되는 브라우저 감지
+function isDisallowedBrowser() {
+  const ua = navigator.userAgent
+  return (
+    /KAKAOTALK/i.test(ua) ||       // 카카오톡 인앱
+    /NAVER/i.test(ua) ||            // 네이버 앱 인앱
+    /Line/i.test(ua) ||             // 라인 인앱
+    /Instagram/i.test(ua) ||        // 인스타그램 인앱
+    /Facebook/i.test(ua) ||         // 페이스북 인앱
+    /SamsungBrowser/i.test(ua)      // 삼성 인터넷
+  )
+}
+
+function isMobileBrowser() {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+}
+
 export default function LoginPage() {
   const { loginWithGoogle, isAuthenticated, authError, loading } = useAuth()
   const navigate = useNavigate()
   const [isLogging, setIsLogging] = useState(false)
+  const [disallowed, setDisallowed] = useState(false)
 
   useEffect(() => {
     if (isAuthenticated) navigate('/', { replace: true })
+    setDisallowed(isDisallowedBrowser())
   }, [isAuthenticated, navigate])
 
   const handleLogin = async () => {
@@ -29,78 +48,111 @@ export default function LoginPage() {
   return (
     <div style={{
       minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 24,
-      background: 'var(--bg)',
-      position: 'relative',
-      overflow: 'hidden'
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      padding: 24, background: 'var(--bg)', position: 'relative', overflow: 'hidden'
     }}>
-      {/* Background grid decoration */}
       <div style={{
         position: 'absolute', inset: 0, pointerEvents: 'none',
-        backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(79,127,255,0.06) 0%, transparent 70%)',
-        backgroundSize: '100% 100%'
+        backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(79,127,255,0.06) 0%, transparent 70%)'
       }} />
 
       <div className="card fade-in" style={{
-        maxWidth: 400,
-        width: '100%',
-        textAlign: 'center',
-        padding: '48px 40px',
-        position: 'relative'
+        maxWidth: 400, width: '100%',
+        textAlign: 'center', padding: '48px 40px', position: 'relative'
       }}>
-        {/* Logo */}
+        {/* 로고 */}
         <div style={{
-          width: 64, height: 64,
-          borderRadius: 16,
-          background: 'var(--accent-bg)',
-          border: '1px solid var(--accent-border)',
+          width: 64, height: 64, borderRadius: 16,
+          background: 'var(--accent-bg)', border: '1px solid var(--accent-border)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          margin: '0 auto 24px',
-          fontSize: '1.8rem', fontWeight: 800,
+          margin: '0 auto 24px', fontSize: '1.8rem', fontWeight: 800,
           color: 'var(--accent2)'
         }}>N</div>
 
         <h1 style={{
           fontSize: '1.5rem', fontWeight: 700,
-          color: 'var(--text)', marginBottom: 8,
-          letterSpacing: '-0.02em'
-        }}>
-          N2SOFT Archive
-        </h1>
-        <p style={{ color: 'var(--text3)', fontSize: '0.9rem', marginBottom: 36, lineHeight: 1.6 }}>
+          color: 'var(--text)', marginBottom: 8, letterSpacing: '-0.02em'
+        }}>N2SOFT Archive</h1>
+
+        <p style={{ color: 'var(--text3)', fontSize: '0.9rem', marginBottom: 28, lineHeight: 1.6 }}>
           내부 임직원 전용 지식 아카이브입니다.<br />
           등록된 Google 계정으로 로그인하세요.
         </p>
 
+        {/* 미지원 브라우저 경고 */}
+        {disallowed && (
+          <div style={{
+            background: 'var(--amber-bg)',
+            border: '1px solid rgba(251,191,36,0.3)',
+            borderRadius: 'var(--radius)',
+            padding: '14px 16px',
+            marginBottom: 20,
+            textAlign: 'left'
+          }}>
+            <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--amber)', marginBottom: 6 }}>
+              ⚠️ 현재 브라우저에서는 로그인이 안 됩니다
+            </div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text2)', lineHeight: 1.6 }}>
+              Google 로그인은 <strong>Chrome 브라우저</strong>에서만 가능합니다.<br />
+              아래 방법으로 접속해주세요:
+            </div>
+            <div style={{
+              marginTop: 10, padding: '10px 12px',
+              background: 'var(--surface)', borderRadius: 8,
+              fontSize: '0.8rem', color: 'var(--text2)', lineHeight: 1.8
+            }}>
+              1. Chrome 앱 실행<br />
+              2. 주소창에 아래 주소 입력:<br />
+              <span style={{
+                fontFamily: 'var(--mono)', fontSize: '0.75rem',
+                color: 'var(--accent2)', wordBreak: 'break-all'
+              }}>
+                hyunbinchoin2.github.io/n2soft-archive/
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* 모바일 Chrome 안내 (미지원은 아니지만 안내) */}
+        {!disallowed && isMobileBrowser() && (
+          <div style={{
+            background: 'var(--accent-bg)',
+            border: '1px solid var(--accent-border)',
+            borderRadius: 'var(--radius)',
+            padding: '10px 14px',
+            marginBottom: 20,
+            fontSize: '0.8rem',
+            color: 'var(--text2)',
+            textAlign: 'left'
+          }}>
+            💡 로그인 후 Google 계정 선택 화면으로 이동합니다. 잠시 기다려주세요.
+          </div>
+        )}
+
+        {/* 에러 메시지 */}
         {authError && (
           <div style={{
             background: 'var(--red-bg)',
             border: '1px solid rgba(248,113,113,0.2)',
             borderRadius: 'var(--radius)',
-            padding: '12px 16px',
-            marginBottom: 24,
-            color: 'var(--red)',
-            fontSize: '0.875rem',
-            textAlign: 'left'
+            padding: '12px 16px', marginBottom: 20,
+            color: 'var(--red)', fontSize: '0.875rem', textAlign: 'left'
           }}>
             {authError}
           </div>
         )}
 
+        {/* 로그인 버튼 */}
         <button
           onClick={handleLogin}
-          disabled={isLogging}
+          disabled={isLogging || disallowed}
           className="btn btn-primary"
           style={{
-            width: '100%',
-            justifyContent: 'center',
-            padding: '13px 24px',
-            fontSize: '0.95rem',
-            fontWeight: 600
+            width: '100%', justifyContent: 'center',
+            padding: '13px 24px', fontSize: '0.95rem', fontWeight: 600,
+            opacity: disallowed ? 0.4 : 1,
+            cursor: disallowed ? 'not-allowed' : 'pointer'
           }}
         >
           {isLogging ? (
@@ -117,13 +169,9 @@ export default function LoginPage() {
         </button>
 
         <div style={{
-          marginTop: 28,
-          padding: '16px',
-          background: 'var(--surface)',
-          borderRadius: 'var(--radius)',
-          fontSize: '0.8rem',
-          color: 'var(--text3)',
-          lineHeight: 1.6
+          marginTop: 24, padding: '14px',
+          background: 'var(--surface)', borderRadius: 'var(--radius)',
+          fontSize: '0.8rem', color: 'var(--text3)', lineHeight: 1.6
         }}>
           🔒 <strong style={{ color: 'var(--text2)' }}>접근 제한</strong><br />
           관리자에게 등록된 Google 계정만 로그인할 수 있습니다.
