@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
-  collection, getDocs, doc, setDoc, deleteDoc, getDoc
+  collection, getDocs, doc, setDoc, deleteDoc
 } from 'firebase/firestore'
 import { sendPasswordResetEmail } from 'firebase/auth'
 import { db, auth } from '../services/firebase'
@@ -18,6 +18,8 @@ export default function AdminPage() {
   const [submitting, setSubmitting]   = useState(false)
   const [message, setMessage]         = useState(null)
   const [activeTab, setActiveTab]     = useState('users')
+  const [editingId, setEditingId]     = useState(null) // 현재 이름 수정 중인 사용자 id
+  const [editingName, setEditingName] = useState('')
 
   const [form, setForm] = useState({ email: '', name: '', role: 'user' })
 
@@ -30,10 +32,9 @@ export default function AdminPage() {
     setLoading(true)
     try {
       const snap = await getDocs(collection(db, 'allowedUsers'))
-      // id = 문서ID = 이메일주소
       const list = snap.docs.map(d => ({
         id: d.id,
-        email: d.id, // 문서ID가 이메일이므로 명시적으로 설정
+        email: d.id,
         ...d.data()
       }))
       setUsers(list)
@@ -68,7 +69,6 @@ export default function AdminPage() {
       setShowAddForm(false)
       fetchUsers()
     } catch (err) {
-      console.error('handleAddUser error:', err)
       setMessage({ type: 'error', text: `등록 오류: ${err.message}` })
     } finally {
       setSubmitting(false)
@@ -80,7 +80,6 @@ export default function AdminPage() {
       await sendPasswordResetEmail(auth, email)
       setMessage({ type: 'success', text: `${email}로 비밀번호 재설정 이메일을 발송했습니다.` })
     } catch (err) {
-      console.error('handleResetPassword error:', err)
       setMessage({ type: 'error', text: `이메일 발송 실패 (${err.code}): ${err.message}` })
     }
   }
@@ -92,7 +91,6 @@ export default function AdminPage() {
       setMessage({ type: 'success', text: `${name} 계정이 삭제됐습니다.` })
       fetchUsers()
     } catch (err) {
-      console.error('handleDeleteUser error:', err)
       setMessage({ type: 'error', text: `삭제 오류 (${err.code}): ${err.message}` })
     }
   }
@@ -103,8 +101,31 @@ export default function AdminPage() {
       setMessage({ type: 'success', text: '권한이 변경됐습니다.' })
       fetchUsers()
     } catch (err) {
-      console.error('handleRoleChange error:', err)
       setMessage({ type: 'error', text: `권한 변경 오류: ${err.message}` })
+    }
+  }
+
+  // 이름 수정 시작
+  const startEditName = (u) => {
+    setEditingId(u.id)
+    setEditingName(u.name || '')
+    setMessage(null)
+  }
+
+  // 이름 수정 저장
+  const handleSaveName = async (email) => {
+    if (!editingName.trim()) {
+      setMessage({ type: 'error', text: '이름을 입력해주세요.' })
+      return
+    }
+    try {
+      await setDoc(doc(db, 'allowedUsers', email), { name: editingName.trim() }, { merge: true })
+      setMessage({ type: 'success', text: '이름이 변경됐습니다.' })
+      setEditingId(null)
+      setEditingName('')
+      fetchUsers()
+    } catch (err) {
+      setMessage({ type: 'error', text: `이름 변경 오류: ${err.message}` })
     }
   }
 
@@ -155,6 +176,7 @@ export default function AdminPage() {
             </button>
           </div>
 
+          {/* 추가 폼 */}
           {showAddForm && (
             <div className="card" style={{ marginBottom: 20 }}>
               <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 6 }}>접근 권한 등록</h2>
@@ -193,6 +215,7 @@ export default function AdminPage() {
             </div>
           )}
 
+          {/* 사용자 목록 */}
           {loading ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {[...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 72 }} />)}
@@ -206,6 +229,7 @@ export default function AdminPage() {
               {users.map(u => (
                 <div key={u.id} className="card" style={{ padding: '16px 20px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                    {/* 아바타 */}
                     <div style={{
                       width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
                       background: u.role === 'admin' ? 'var(--amber-bg)' : 'var(--accent-bg)',
@@ -216,15 +240,56 @@ export default function AdminPage() {
                       {u.name?.[0]?.toUpperCase() || '?'}
                     </div>
 
+                    {/* 이름 / 이메일 */}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{u.name}</span>
-                        <span className={`badge ${u.role === 'admin' ? 'badge-amber' : 'badge-blue'}`}>
-                          {u.role === 'admin' ? '관리자' : '일반'}
-                        </span>
-                        {u.id === user?.email && <span className="badge badge-green">나</span>}
-                      </div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text3)', marginTop: 2 }}>
+                      {editingId === u.id ? (
+                        // 이름 수정 인풋
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <input
+                            type="text"
+                            value={editingName}
+                            onChange={e => setEditingName(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleSaveName(u.id)
+                              if (e.key === 'Escape') { setEditingId(null); setEditingName('') }
+                            }}
+                            style={{ padding: '5px 10px', fontSize: '0.875rem', borderRadius: 6, width: 140 }}
+                            autoFocus
+                          />
+                          <button onClick={() => handleSaveName(u.id)} className="btn btn-primary"
+                            style={{ fontSize: '0.78rem', padding: '5px 12px' }}>저장</button>
+                          <button onClick={() => { setEditingId(null); setEditingName('') }} className="btn btn-ghost"
+                            style={{ fontSize: '0.78rem', padding: '5px 10px' }}>취소</button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{u.name}</span>
+                          <span className={`badge ${u.role === 'admin' ? 'badge-amber' : 'badge-blue'}`}>
+                            {u.role === 'admin' ? '관리자' : '일반'}
+                          </span>
+                          {u.id === user?.email && <span className="badge badge-green">나</span>}
+                          {/* 이름 수정 버튼 */}
+                          <button
+                            onClick={() => startEditName(u)}
+                            style={{
+                              fontSize: '0.75rem', color: 'var(--text3)',
+                              background: 'none', cursor: 'pointer',
+                              padding: '2px 6px', borderRadius: 4,
+                              border: '1px solid var(--border)',
+                              transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.color = 'var(--text)'
+                              e.currentTarget.style.borderColor = 'var(--border2)'
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.color = 'var(--text3)'
+                              e.currentTarget.style.borderColor = 'var(--border)'
+                            }}
+                          >✏️ 이름 변경</button>
+                        </div>
+                      )}
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text3)', marginTop: 4 }}>
                         {u.id}
                         {u.createdAt && (
                           <span style={{ marginLeft: 8 }}>
@@ -234,7 +299,8 @@ export default function AdminPage() {
                       </div>
                     </div>
 
-                    {u.id !== user?.email && (
+                    {/* 액션 버튼 (본인 제외) */}
+                    {u.id !== user?.email && editingId !== u.id && (
                       <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
                         <select value={u.role} onChange={e => handleRoleChange(u.id, e.target.value)}
                           style={{ padding: '5px 10px', fontSize: '0.78rem', borderRadius: 6, cursor: 'pointer', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text2)' }}>
