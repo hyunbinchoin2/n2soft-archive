@@ -11,7 +11,8 @@ import {
 export default function DocumentDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, userInfo } = useAuth()
+  const namedUser = { ...user, displayName: userInfo?.name || user?.displayName || user?.email }
 
   const [doc, setDoc]           = useState(null)
   const [loading, setLoading]   = useState(true)
@@ -68,7 +69,7 @@ export default function DocumentDetailPage() {
     if (!commentText.trim()) return
     setSubmittingComment(true)
     try {
-      const newComment = await addComment(id, 'document', commentText.trim(), user)
+      const newComment = await addComment(id, 'document', commentText.trim(), namedUser)
       setComments(prev => [...prev, newComment])
       setCommentText('')
     } finally {

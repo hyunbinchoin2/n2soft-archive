@@ -7,9 +7,11 @@ import { uploadDocument, uploadTextOnly, CATEGORIES } from '../services/archiveS
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 
 export default function UploadPage() {
-  const { user } = useAuth()
+  const { user, userInfo } = useAuth()
   const navigate = useNavigate()
   const fileInputRef = useRef(null)
+  // 관리자 페이지에서 지정한 이름을 우선 사용
+  const namedUser = { ...user, displayName: userInfo?.name || user?.displayName || user?.email }
 
   const [file, setFile]           = useState(null)
   const [dragOver, setDragOver]   = useState(false)
@@ -60,9 +62,9 @@ export default function UploadPage() {
 
       let result
       if (file) {
-        result = await uploadDocument(file, metadata, user, setProgress)
+        result = await uploadDocument(file, metadata, namedUser, setProgress)
       } else {
-        result = await uploadTextOnly(metadata, user)
+        result = await uploadTextOnly(metadata, namedUser)
       }
 
       setSuccess(true)
@@ -111,7 +113,7 @@ export default function UploadPage() {
             }}>{user?.email?.[0]?.toUpperCase()}</div>
         }
         <div>
-          <div style={{ fontWeight: 500, fontSize: '0.875rem' }}>{user?.displayName || user?.email}</div>
+          <div style={{ fontWeight: 500, fontSize: '0.875rem' }}>{userInfo?.name || user?.displayName || user?.email}</div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text3)' }}>등록 이력에 자동 기록됩니다</div>
         </div>
         <span className="badge badge-green" style={{ marginLeft: 'auto' }}>인증된 사용자</span>
