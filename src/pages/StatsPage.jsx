@@ -16,58 +16,76 @@ export default function StatsPage() {
   const fetchStats = async () => {
     setLoading(true)
     try {
-      const [docSnap, qaSnap] = await Promise.all([
+      const [docSnap, qaSnap, userSnap] = await Promise.all([
         getDocs(query(collection(db, 'documents'), orderBy('createdAt', 'desc'))),
-        getDocs(query(collection(db, 'questions'), orderBy('createdAt', 'desc')))
+        getDocs(query(collection(db, 'questions'), orderBy('createdAt', 'desc'))),
+        getDocs(collection(db, 'allowedUsers'))
       ])
 
-      const docs = docSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-      const qas  = qaSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      const docs  = docSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      const qas   = qaSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+
+      // allowedUsers 에서 이메일 → 이름 매핑
+      const nameMap = {}
+      userSnap.docs.forEach(d => {
+        nameMap[d.id] = d.data().name || d.id
+      })
+
+      // 이메일로 이름 조회 (없으면 기존 name 필드 사용, 그것도 없으면 이메일)
+      const getName = (email, fallbackName) => {
+        if (!email) return fallbackName || '알 수 없음'
+        return nameMap[email] || fallbackName || email
+      }
 
       // ── 업로드 랭킹 ──────────────────────────────────
       const uploadMap = {}
       docs.forEach(d => {
-        const name = d.uploader?.name || d.uploader?.email || '알 수 없음'
         const email = d.uploader?.email || ''
-        if (!uploadMap[email]) uploadMap[email] = { name, email, count: 0, items: [] }
+        const name  = getName(email, d.uploader?.name)
+        if (!uploadMap[email]) uploadMap[email] = { name, email, count: 0 }
         uploadMap[email].count++
-        uploadMap[email].items.push(d.title)
+        uploadMap[email].name = getName(email, d.uploader?.name)
       })
       const uploadRank = Object.values(uploadMap).sort((a, b) => b.count - a.count)
 
       // ── 질문 랭킹 ────────────────────────────────────
       const questionMap = {}
       qas.forEach(q => {
-        const name = q.author?.name || q.author?.email || '알 수 없음'
         const email = q.author?.email || ''
+        const name  = getName(email, q.author?.name)
         if (!questionMap[email]) questionMap[email] = { name, email, count: 0 }
         questionMap[email].count++
+        questionMap[email].name = getName(email, q.author?.name)
       })
       const questionRank = Object.values(questionMap).sort((a, b) => b.count - a.count)
 
       // ── 답변 랭킹 ────────────────────────────────────
       const answerMap = {}
       qas.forEach(q => {
-        (q.answers || []).forEach(a => {
-          const name = a.author?.name || a.author?.email || '알 수 없음'
+        ;(q.answers || []).forEach(a => {
           const email = a.author?.email || ''
+          const name  = getName(email, a.author?.name)
           if (!answerMap[email]) answerMap[email] = { name, email, count: 0 }
           answerMap[email].count++
+          answerMap[email].name = getName(email, a.author?.name)
         })
       })
       const answerRank = Object.values(answerMap).sort((a, b) => b.count - a.count)
 
       // ── 조회수 TOP 문서 ──────────────────────────────
-      const topViewed = [...docs].sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0)).slice(0, 5)
+      const topViewed = [...docs]
+        .sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0))
+        .slice(0, 5)
 
       // ── 종합 활동 랭킹 (업로드 2점 + 질문 1점 + 답변 1점) ──
       const totalMap = {}
-      const addScore = (email, name, score, type) => {
+      const addScore = (email, fallbackName, score, type) => {
         if (!email) return
+        const name = getName(email, fallbackName)
         if (!totalMap[email]) totalMap[email] = { name, email, score: 0, upload: 0, question: 0, answer: 0 }
         totalMap[email].score += score
         totalMap[email][type] += 1
-        if (name) totalMap[email].name = name
+        totalMap[email].name = getName(email, fallbackName)
       }
       docs.forEach(d => addScore(d.uploader?.email, d.uploader?.name, 2, 'upload'))
       qas.forEach(q => {
@@ -124,11 +142,11 @@ export default function StatsPage() {
         gap: 12, marginBottom: 36
       }}>
         {[
-          { label: '총 문서', value: summary.totalDocs, emoji: '📄' },
-          { label: 'Q&A',    value: summary.totalQA,   emoji: '💬' },
-          { label: '총 답변', value: summary.totalAnswers, emoji: '✅' },
-          { label: '총 조회수', value: summary.totalViews, emoji: '👁' },
-          { label: '기여 멤버', value: summary.totalMembers, emoji: '👥' }
+          { label: '총 문서',   value: summary.totalDocs,     emoji: '📄' },
+          { label: 'Q&A',      value: summary.totalQA,        emoji: '💬' },
+          { label: '총 답변',  value: summary.totalAnswers,   emoji: '✅' },
+          { label: '총 조회수', value: summary.totalViews,    emoji: '👁' },
+          { label: '기여 멤버', value: summary.totalMembers,  emoji: '👥' }
         ].map((s, i) => (
           <div key={i} className="card" style={{ textAlign: 'center', padding: '16px 12px' }}>
             <div style={{ fontSize: '1.6rem', marginBottom: 6 }}>{s.emoji}</div>
@@ -140,15 +158,13 @@ export default function StatsPage() {
         ))}
       </div>
 
-      {/* 종합 랭킹 (왕관) */}
+      {/* 종합 랭킹 */}
       <div className="card" style={{ marginBottom: 28 }}>
         <h2 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: 4 }}>🏆 종합 활동 랭킹</h2>
         <p style={{ fontSize: '0.78rem', color: 'var(--text3)', marginBottom: 20 }}>
           업로드 2점 + 질문 1점 + 답변 1점 기준
         </p>
-        {totalRank.length === 0 ? (
-          <EmptyState />
-        ) : (
+        {totalRank.length === 0 ? <EmptyState /> : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {totalRank.slice(0, 10).map((u, i) => (
               <div key={u.email} style={{
@@ -181,13 +197,12 @@ export default function StatsPage() {
                   {i === 0 && (
                     <span style={{
                       position: 'absolute', top: -10, left: '50%',
-                      transform: 'translateX(-50%)',
-                      fontSize: '0.9rem'
+                      transform: 'translateX(-50%)', fontSize: '0.9rem'
                     }}>👑</span>
                   )}
                 </div>
 
-                {/* 이름 + 이메일 */}
+                {/* 이름 + 상세 */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
                     fontWeight: 600, fontSize: '0.9rem',
@@ -217,29 +232,9 @@ export default function StatsPage() {
         gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
         gap: 20, marginBottom: 28
       }}>
-        {/* 업로드 랭킹 */}
-        <RankCard
-          title="📤 업로드 랭킹"
-          desc="문서를 가장 많이 올린 사람"
-          data={uploadRank.slice(0, 5)}
-          unit="개"
-        />
-
-        {/* 질문 랭킹 */}
-        <RankCard
-          title="❓ 질문 랭킹"
-          desc="질문을 가장 많이 한 사람"
-          data={questionRank.slice(0, 5)}
-          unit="건"
-        />
-
-        {/* 답변 랭킹 */}
-        <RankCard
-          title="💡 답변 랭킹"
-          desc="답변을 가장 많이 한 사람"
-          data={answerRank.slice(0, 5)}
-          unit="개"
-        />
+        <RankCard title="📤 업로드 랭킹" desc="문서를 가장 많이 올린 사람" data={uploadRank.slice(0, 5)} unit="개" />
+        <RankCard title="❓ 질문 랭킹"   desc="질문을 가장 많이 한 사람"   data={questionRank.slice(0, 5)} unit="건" />
+        <RankCard title="💡 답변 랭킹"   desc="답변을 가장 많이 한 사람"   data={answerRank.slice(0, 5)} unit="개" />
       </div>
 
       {/* 인기 문서 TOP 5 */}
@@ -287,8 +282,7 @@ export default function StatsPage() {
                 </div>
                 <div style={{
                   fontSize: '0.875rem', fontWeight: 600,
-                  color: i === 0 ? 'var(--amber)' : 'var(--text2)',
-                  flexShrink: 0
+                  color: i === 0 ? 'var(--amber)' : 'var(--text2)', flexShrink: 0
                 }}>
                   👁 {doc.viewCount || 0}
                 </div>
@@ -316,14 +310,11 @@ function RankCard({ title, desc, data, unit }) {
               borderRadius: 8,
               border: `1px solid ${i === 0 ? 'rgba(251,191,36,0.2)' : 'var(--border)'}`
             }}>
-              {/* 순위 */}
               <div style={{ width: 24, textAlign: 'center', flexShrink: 0 }}>
                 {i === 0 ? '👑' : i === 1 ? '🥈' : i === 2 ? '🥉' : (
                   <span style={{ fontSize: '0.8rem', color: 'var(--text3)', fontWeight: 600 }}>{i + 1}</span>
                 )}
               </div>
-
-              {/* 아바타 */}
               <div style={{ position: 'relative', flexShrink: 0 }}>
                 <div style={{
                   width: 32, height: 32, borderRadius: '50%',
@@ -337,13 +328,10 @@ function RankCard({ title, desc, data, unit }) {
                 {i === 0 && (
                   <span style={{
                     position: 'absolute', top: -9, left: '50%',
-                    transform: 'translateX(-50%)',
-                    fontSize: '0.75rem'
+                    transform: 'translateX(-50%)', fontSize: '0.75rem'
                   }}>👑</span>
                 )}
               </div>
-
-              {/* 이름 */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
                   fontWeight: 500, fontSize: '0.875rem',
@@ -351,12 +339,9 @@ function RankCard({ title, desc, data, unit }) {
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
                 }}>{u.name}</div>
               </div>
-
-              {/* 카운트 */}
               <div style={{
                 fontWeight: 700, fontSize: '0.95rem',
-                color: i === 0 ? 'var(--amber)' : 'var(--text2)',
-                flexShrink: 0
+                color: i === 0 ? 'var(--amber)' : 'var(--text2)', flexShrink: 0
               }}>
                 {u.count}{unit}
               </div>
@@ -370,10 +355,9 @@ function RankCard({ title, desc, data, unit }) {
 
 function EmptyState() {
   return (
-    <div style={{
-      textAlign: 'center', padding: '20px',
-      color: 'var(--text3)', fontSize: '0.85rem'
-    }}>아직 데이터가 없습니다</div>
+    <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text3)', fontSize: '0.85rem' }}>
+      아직 데이터가 없습니다
+    </div>
   )
 }
 
