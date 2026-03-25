@@ -31,7 +31,11 @@ export async function uploadDocument(file, metadata, user, onProgress) {
   const ext = file.name.split('.').pop()
   const storagePath = `documents/${Date.now()}_${file.name}`
   const storageRef = ref(storage, storagePath)
-  const uploadTask = uploadBytesResumable(storageRef, file)
+  // txt 파일은 charset=utf-8 명시해서 한글 깨짐 방지
+  const uploadMetadata = ext.toLowerCase() === 'txt'
+    ? { contentType: 'text/plain;charset=utf-8' }
+    : { contentType: file.type || 'application/octet-stream' }
+  const uploadTask = uploadBytesResumable(storageRef, file, uploadMetadata)
 
   const downloadURL = await new Promise((resolve, reject) => {
     uploadTask.on(
@@ -235,7 +239,7 @@ export async function acceptAnswer(questionId, answerId) {
 
 export const CATEGORIES = [
   '전체', '엔투소프트', '이기종 전문', '저축은행', '공공마이데이터/스크래핑',
-  '대출 정책', '큐피드', '개발', '디자인', '기획', '인사/총무', '기타'
+  '대출 정책', '개발', '디자인', '기획', '인사/총무', '기타'
 ]
 
 export async function updateDocument(docId, metadata) {

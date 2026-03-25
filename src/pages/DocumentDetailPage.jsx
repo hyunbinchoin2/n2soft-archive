@@ -204,16 +204,18 @@ export default function DocumentDetailPage() {
         )}
       </div>
 
-      {/* 다운로드 */}
-      <a
-        href={doc.downloadURL}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="btn btn-primary"
-        style={{ display: 'inline-flex', marginBottom: 24, textDecoration: 'none' }}
-      >
-        ⬇️ 파일 다운로드
-      </a>
+      {/* 다운로드 - 파일이 있을 때만 표시 */}
+      {doc.downloadURL && (
+        <a
+          href={doc.downloadURL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn btn-primary"
+          style={{ display: 'inline-flex', marginBottom: 24, textDecoration: 'none' }}
+        >
+          ⬇️ 파일 다운로드
+        </a>
+      )}
 
       {/* 업로드 이력 */}
       <div className="card" style={{ marginBottom: 20 }}>
