@@ -13,14 +13,10 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 }
 
-// 메인 앱
 const app = initializeApp(firebaseConfig)
+
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 export const storage = getStorage(app)
-
-// 보조 앱 (관리자가 새 계정 생성 시 현재 로그인 유지를 위해 사용)
-const secondaryApp = initializeApp(firebaseConfig, 'secondary')
-export const secondaryAuth = getAuth(secondaryApp)
 
 export default app
