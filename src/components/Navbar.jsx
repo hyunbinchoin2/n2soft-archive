@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 export default function Navbar() {
   const { user, userInfo, logout, isAdmin } = useAuth()
   const navigate = useNavigate()
-  const [query, setQuery]     = useState('')
+  const [query, setQuery]       = useState('')
   const [showMenu, setShowMenu] = useState(false)
 
   const handleSearch = (e) => {
@@ -40,10 +40,9 @@ export default function Navbar() {
         <NavLink to="/" end className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>홈</NavLink>
         <NavLink to="/upload" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>업로드</NavLink>
         <NavLink to="/qa" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>Q&A</NavLink>
+        <NavLink to="/stats" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>통계</NavLink>
         {isAdmin && (
-          <NavLink to="/admin" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
-            관리자
-          </NavLink>
+          <NavLink to="/admin" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>관리자</NavLink>
         )}
 
         <div style={{ position: 'relative' }}>

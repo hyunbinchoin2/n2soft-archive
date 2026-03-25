@@ -12,6 +12,7 @@ import QuestionDetailPage from './pages/QuestionDetailPage'
 import AskQuestionPage from './pages/AskQuestionPage'
 import DocumentDetailPage from './pages/DocumentDetailPage'
 import AdminPage from './pages/AdminPage'
+import StatsPage from './pages/StatsPage'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth()
@@ -66,7 +67,6 @@ export default function App() {
           <ProtectedRoute><UploadPage /></ProtectedRoute>
         } />
 
-        {/* QA — 반드시 /qa/ask 가 /qa/:id 보다 먼저 */}
         <Route path="/qa" element={
           <ProtectedRoute><QAPage /></ProtectedRoute>
         } />
@@ -77,7 +77,10 @@ export default function App() {
           <ProtectedRoute><QuestionDetailPage /></ProtectedRoute>
         } />
 
-        {/* 관리자 */}
+        <Route path="/stats" element={
+          <ProtectedRoute><StatsPage /></ProtectedRoute>
+        } />
+
         <Route path="/admin" element={
           <AdminRoute><AdminPage /></AdminRoute>
         } />
