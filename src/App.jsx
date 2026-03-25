@@ -11,6 +11,7 @@ import QAPage from './pages/QAPage'
 import QuestionDetailPage from './pages/QuestionDetailPage'
 import AskQuestionPage from './pages/AskQuestionPage'
 import DocumentDetailPage from './pages/DocumentDetailPage'
+import AdminPage from './pages/AdminPage'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth()
@@ -19,15 +20,20 @@ function ProtectedRoute({ children }) {
   return children
 }
 
+function AdminRoute({ children }) {
+  const { isAuthenticated, isAdmin, loading } = useAuth()
+  if (loading) return <FullPageSpinner />
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+  if (!isAdmin) return <Navigate to="/" replace />
+  return children
+}
+
 function FullPageSpinner() {
   return (
     <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      flexDirection: 'column',
-      gap: 16
+      minHeight: '100vh', display: 'flex',
+      alignItems: 'center', justifyContent: 'center',
+      flexDirection: 'column', gap: 16
     }}>
       <div className="spinner" style={{ width: 32, height: 32 }} />
       <p style={{ color: 'var(--text3)', fontSize: '0.875rem' }}>불러오는 중...</p>
@@ -66,6 +72,9 @@ export default function App() {
         } />
         <Route path="/qa/ask" element={
           <ProtectedRoute><AskQuestionPage /></ProtectedRoute>
+        } />
+        <Route path="/admin" element={
+          <AdminRoute><AdminPage /></AdminRoute>
         } />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

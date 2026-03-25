@@ -1,9 +1,6 @@
 // src/services/firebase.js
-// Firebase 초기화 및 설정
-// 실제 배포 시 .env 파일에 환경변수 설정 필요
-
 import { initializeApp } from 'firebase/app'
-import { getAuth, GoogleAuthProvider } from 'firebase/auth'
+import { getAuth } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 
@@ -16,12 +13,14 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 }
 
+// 메인 앱
 const app = initializeApp(firebaseConfig)
-
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 export const storage = getStorage(app)
-export const googleProvider = new GoogleAuthProvider()
 
+// 보조 앱 (관리자가 새 계정 생성 시 현재 로그인 유지를 위해 사용)
+const secondaryApp = initializeApp(firebaseConfig, 'secondary')
+export const secondaryAuth = getAuth(secondaryApp)
 
 export default app

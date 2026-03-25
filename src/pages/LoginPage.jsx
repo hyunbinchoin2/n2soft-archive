@@ -1,40 +1,41 @@
 // src/pages/LoginPage.jsx
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-
-// Google 로그인이 차단되는 브라우저 감지
-function isDisallowedBrowser() {
-  const ua = navigator.userAgent
-  return (
-    /KAKAOTALK/i.test(ua) ||       // 카카오톡 인앱
-    /NAVER/i.test(ua) ||            // 네이버 앱 인앱
-    /Line/i.test(ua) ||             // 라인 인앱
-    /Instagram/i.test(ua) ||        // 인스타그램 인앱
-    /Facebook/i.test(ua) ||         // 페이스북 인앱
-    /SamsungBrowser/i.test(ua)      // 삼성 인터넷
-  )
-}
-
-function isMobileBrowser() {
-  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-}
+import { useEffect } from 'react'
 
 export default function LoginPage() {
-  const { loginWithGoogle, isAuthenticated, authError, loading } = useAuth()
+  const { login, resetPassword, isAuthenticated, authError, loading } = useAuth()
   const navigate = useNavigate()
+
+  const [email, setEmail]       = useState('')
+  const [password, setPassword] = useState('')
   const [isLogging, setIsLogging] = useState(false)
-  const [disallowed, setDisallowed] = useState(false)
+  const [showReset, setShowReset] = useState(false)
+  const [resetEmail, setResetEmail] = useState('')
+  const [resetSent, setResetSent]   = useState(false)
+  const [resetLoading, setResetLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   useEffect(() => {
     if (isAuthenticated) navigate('/', { replace: true })
-    setDisallowed(isDisallowedBrowser())
   }, [isAuthenticated, navigate])
 
-  const handleLogin = async () => {
+  const handleLogin = async (e) => {
+    e.preventDefault()
+    if (!email.trim() || !password.trim()) return
     setIsLogging(true)
-    await loginWithGoogle()
+    await login(email.trim(), password)
     setIsLogging(false)
+  }
+
+  const handleReset = async (e) => {
+    e.preventDefault()
+    if (!resetEmail.trim()) return
+    setResetLoading(true)
+    const ok = await resetPassword(resetEmail.trim())
+    setResetLoading(false)
+    if (ok) setResetSent(true)
   }
 
   if (loading) {
@@ -47,8 +48,7 @@ export default function LoginPage() {
 
   return (
     <div style={{
-      minHeight: '100vh',
-      display: 'flex', flexDirection: 'column',
+      minHeight: '100vh', display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
       padding: 24, background: 'var(--bg)', position: 'relative', overflow: 'hidden'
     }}>
@@ -75,119 +75,141 @@ export default function LoginPage() {
           color: 'var(--text)', marginBottom: 8, letterSpacing: '-0.02em'
         }}>N2SOFT Archive</h1>
 
-        <p style={{ color: 'var(--text3)', fontSize: '0.9rem', marginBottom: 28, lineHeight: 1.6 }}>
-          내부 임직원 전용 지식 아카이브입니다.<br />
-          등록된 Google 계정으로 로그인하세요.
-        </p>
+        {!showReset ? (
+          <>
+            <p style={{ color: 'var(--text3)', fontSize: '0.9rem', marginBottom: 32, lineHeight: 1.6 }}>
+              내부 임직원 전용 지식 아카이브입니다.
+            </p>
 
-        {/* 미지원 브라우저 경고 */}
-        {disallowed && (
-          <div style={{
-            background: 'var(--amber-bg)',
-            border: '1px solid rgba(251,191,36,0.3)',
-            borderRadius: 'var(--radius)',
-            padding: '14px 16px',
-            marginBottom: 20,
-            textAlign: 'left'
-          }}>
-            <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--amber)', marginBottom: 6 }}>
-              ⚠️ 현재 브라우저에서는 로그인이 안 됩니다
-            </div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text2)', lineHeight: 1.6 }}>
-              Google 로그인은 <strong>Chrome 브라우저</strong>에서만 가능합니다.<br />
-              아래 방법으로 접속해주세요:
-            </div>
+            {/* 에러 메시지 */}
+            {authError && (
+              <div style={{
+                background: 'var(--red-bg)', border: '1px solid rgba(248,113,113,0.2)',
+                borderRadius: 'var(--radius)', padding: '12px 16px',
+                marginBottom: 20, color: 'var(--red)', fontSize: '0.875rem', textAlign: 'left'
+              }}>{authError}</div>
+            )}
+
+            {/* 로그인 폼 */}
+            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ textAlign: 'left' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text3)', marginBottom: 6 }}>
+                  이메일
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="이메일 주소 입력"
+                  style={{ width: '100%', padding: '11px 14px' }}
+                  autoFocus
+                  required
+                />
+              </div>
+
+              <div style={{ textAlign: 'left' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text3)', marginBottom: 6 }}>
+                  비밀번호
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="비밀번호 입력"
+                    style={{ width: '100%', padding: '11px 44px 11px 14px' }}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(v => !v)}
+                    style={{
+                      position: 'absolute', right: 12, top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none', color: 'var(--text3)',
+                      fontSize: '0.8rem', cursor: 'pointer'
+                    }}
+                  >{showPassword ? '숨기기' : '보기'}</button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={isLogging}
+                style={{ width: '100%', justifyContent: 'center', padding: '13px', fontSize: '0.95rem', fontWeight: 600, marginTop: 4 }}
+              >
+                {isLogging ? (
+                  <><div className="spinner" style={{ width: 18, height: 18, borderTopColor: '#fff' }} />로그인 중...</>
+                ) : '로그인'}
+              </button>
+            </form>
+
+            <button
+              onClick={() => { setShowReset(true); setResetEmail(email) }}
+              style={{
+                marginTop: 16, fontSize: '0.8rem',
+                color: 'var(--accent2)', background: 'none', cursor: 'pointer'
+              }}
+            >비밀번호를 잊으셨나요?</button>
+
             <div style={{
-              marginTop: 10, padding: '10px 12px',
-              background: 'var(--surface)', borderRadius: 8,
-              fontSize: '0.8rem', color: 'var(--text2)', lineHeight: 1.8
+              marginTop: 24, padding: '14px',
+              background: 'var(--surface)', borderRadius: 'var(--radius)',
+              fontSize: '0.8rem', color: 'var(--text3)', lineHeight: 1.6
             }}>
-              1. Chrome 앱 실행<br />
-              2. 주소창에 아래 주소 입력:<br />
-              <span style={{
-                fontFamily: 'var(--mono)', fontSize: '0.75rem',
-                color: 'var(--accent2)', wordBreak: 'break-all'
-              }}>
-                hyunbinchoin2.github.io/n2soft-archive/
-              </span>
+              🔒 <strong style={{ color: 'var(--text2)' }}>접근 제한</strong><br />
+              관리자에게 등록된 계정만 로그인할 수 있습니다.
             </div>
-          </div>
+          </>
+        ) : (
+          <>
+            {/* 비밀번호 재설정 */}
+            <p style={{ color: 'var(--text3)', fontSize: '0.9rem', marginBottom: 28, lineHeight: 1.6 }}>
+              가입한 이메일 주소를 입력하면<br />비밀번호 재설정 링크를 보내드립니다.
+            </p>
+
+            {resetSent ? (
+              <div style={{
+                background: 'var(--green-bg)', border: '1px solid rgba(52,211,153,0.2)',
+                borderRadius: 'var(--radius)', padding: '16px',
+                color: 'var(--green)', fontSize: '0.875rem', marginBottom: 20
+              }}>
+                ✅ 재설정 이메일을 발송했습니다.<br />
+                받은 편지함을 확인해주세요.
+              </div>
+            ) : (
+              <form onSubmit={handleReset} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <input
+                  type="email"
+                  value={resetEmail}
+                  onChange={e => setResetEmail(e.target.value)}
+                  placeholder="이메일 주소 입력"
+                  style={{ width: '100%', padding: '11px 14px' }}
+                  autoFocus
+                  required
+                />
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={resetLoading}
+                  style={{ width: '100%', justifyContent: 'center', padding: '13px', fontWeight: 600 }}
+                >
+                  {resetLoading ? '전송 중...' : '재설정 이메일 보내기'}
+                </button>
+              </form>
+            )}
+
+            <button
+              onClick={() => { setShowReset(false); setResetSent(false) }}
+              style={{
+                marginTop: 16, fontSize: '0.8rem',
+                color: 'var(--text2)', background: 'none', cursor: 'pointer'
+              }}
+            >← 로그인으로 돌아가기</button>
+          </>
         )}
-
-        {/* 모바일 Chrome 안내 (미지원은 아니지만 안내) */}
-        {!disallowed && isMobileBrowser() && (
-          <div style={{
-            background: 'var(--accent-bg)',
-            border: '1px solid var(--accent-border)',
-            borderRadius: 'var(--radius)',
-            padding: '10px 14px',
-            marginBottom: 20,
-            fontSize: '0.8rem',
-            color: 'var(--text2)',
-            textAlign: 'left'
-          }}>
-            💡 로그인 후 Google 계정 선택 화면으로 이동합니다. 잠시 기다려주세요.
-          </div>
-        )}
-
-        {/* 에러 메시지 */}
-        {authError && (
-          <div style={{
-            background: 'var(--red-bg)',
-            border: '1px solid rgba(248,113,113,0.2)',
-            borderRadius: 'var(--radius)',
-            padding: '12px 16px', marginBottom: 20,
-            color: 'var(--red)', fontSize: '0.875rem', textAlign: 'left'
-          }}>
-            {authError}
-          </div>
-        )}
-
-        {/* 로그인 버튼 */}
-        <button
-          onClick={handleLogin}
-          disabled={isLogging || disallowed}
-          className="btn btn-primary"
-          style={{
-            width: '100%', justifyContent: 'center',
-            padding: '13px 24px', fontSize: '0.95rem', fontWeight: 600,
-            opacity: disallowed ? 0.4 : 1,
-            cursor: disallowed ? 'not-allowed' : 'pointer'
-          }}
-        >
-          {isLogging ? (
-            <>
-              <div className="spinner" style={{ width: 18, height: 18, borderTopColor: '#fff' }} />
-              로그인 중...
-            </>
-          ) : (
-            <>
-              <GoogleIcon />
-              Google 계정으로 로그인
-            </>
-          )}
-        </button>
-
-        <div style={{
-          marginTop: 24, padding: '14px',
-          background: 'var(--surface)', borderRadius: 'var(--radius)',
-          fontSize: '0.8rem', color: 'var(--text3)', lineHeight: 1.6
-        }}>
-          🔒 <strong style={{ color: 'var(--text2)' }}>접근 제한</strong><br />
-          관리자에게 등록된 Google 계정만 로그인할 수 있습니다.
-        </div>
       </div>
     </div>
-  )
-}
-
-function GoogleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24">
-      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-    </svg>
   )
 }
