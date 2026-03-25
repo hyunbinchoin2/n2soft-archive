@@ -30,8 +30,12 @@ export default function AdminPage() {
     setLoading(true)
     try {
       const snap = await getDocs(collection(db, 'allowedUsers'))
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-      console.log('Fetched users:', list)
+      // id = 문서ID = 이메일주소
+      const list = snap.docs.map(d => ({
+        id: d.id,
+        email: d.id, // 문서ID가 이메일이므로 명시적으로 설정
+        ...d.data()
+      }))
       setUsers(list)
     } catch (err) {
       console.error('fetchUsers error:', err)
@@ -46,7 +50,7 @@ export default function AdminPage() {
     setSubmitting(true)
     setMessage(null)
     try {
-      const existing = users.find(u => u.email === form.email)
+      const existing = users.find(u => u.id === form.email)
       if (existing) {
         setMessage({ type: 'error', text: '이미 등록된 이메일입니다.' })
         setSubmitting(false)
@@ -77,30 +81,18 @@ export default function AdminPage() {
       setMessage({ type: 'success', text: `${email}로 비밀번호 재설정 이메일을 발송했습니다.` })
     } catch (err) {
       console.error('handleResetPassword error:', err)
-      setMessage({ type: 'error', text: `이메일 발송 실패: ${err.message}` })
+      setMessage({ type: 'error', text: `이메일 발송 실패 (${err.code}): ${err.message}` })
     }
   }
 
   const handleDeleteUser = async (email, name) => {
     if (!window.confirm(`${name}(${email}) 계정을 삭제하시겠습니까?`)) return
-    console.log('Deleting user:', email)
-    console.log('Current user:', user?.email)
-    console.log('Is admin:', isAdmin)
     try {
-      // 삭제 전 문서 존재 확인
-      const docRef = doc(db, 'allowedUsers', email)
-      const docSnap = await getDoc(docRef)
-      console.log('Document exists:', docSnap.exists())
-      console.log('Document path:', docRef.path)
-
-      await deleteDoc(docRef)
-      console.log('Delete success!')
+      await deleteDoc(doc(db, 'allowedUsers', email))
       setMessage({ type: 'success', text: `${name} 계정이 삭제됐습니다.` })
       fetchUsers()
     } catch (err) {
-      console.error('handleDeleteUser error code:', err.code)
-      console.error('handleDeleteUser error message:', err.message)
-      console.error('handleDeleteUser full error:', err)
+      console.error('handleDeleteUser error:', err)
       setMessage({ type: 'error', text: `삭제 오류 (${err.code}): ${err.message}` })
     }
   }
@@ -167,7 +159,8 @@ export default function AdminPage() {
             <div className="card" style={{ marginBottom: 20 }}>
               <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 6 }}>접근 권한 등록</h2>
               <p style={{ fontSize: '0.8rem', color: 'var(--text3)', marginBottom: 16, lineHeight: 1.6 }}>
-                여기서 등록 후 <strong style={{ color: 'var(--amber)' }}>Firebase Console → Authentication → Users</strong>에서 동일 이메일로 계정도 만들어야 로그인이 가능합니다.
+                여기서 등록 후 <strong style={{ color: 'var(--amber)' }}>Firebase Console → Authentication → Users</strong>에서
+                동일 이메일로 계정도 만들어야 로그인이 가능합니다.
               </p>
               <form onSubmit={handleAddUser} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
@@ -204,6 +197,10 @@ export default function AdminPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {[...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 72 }} />)}
             </div>
+          ) : users.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text3)' }}>
+              등록된 사용자가 없습니다.
+            </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {users.map(u => (
@@ -218,6 +215,7 @@ export default function AdminPage() {
                     }}>
                       {u.name?.[0]?.toUpperCase() || '?'}
                     </div>
+
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{u.name}</span>
@@ -227,20 +225,25 @@ export default function AdminPage() {
                         {u.id === user?.email && <span className="badge badge-green">나</span>}
                       </div>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text3)', marginTop: 2 }}>
-                        {u.email}
-                        {u.createdAt && <span style={{ marginLeft: 8 }}>· {new Date(u.createdAt).toLocaleDateString('ko-KR')}</span>}
+                        {u.id}
+                        {u.createdAt && (
+                          <span style={{ marginLeft: 8 }}>
+                            · {new Date(u.createdAt).toLocaleDateString('ko-KR')}
+                          </span>
+                        )}
                       </div>
                     </div>
+
                     {u.id !== user?.email && (
                       <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
-                        <select value={u.role} onChange={e => handleRoleChange(u.email, e.target.value)}
+                        <select value={u.role} onChange={e => handleRoleChange(u.id, e.target.value)}
                           style={{ padding: '5px 10px', fontSize: '0.78rem', borderRadius: 6, cursor: 'pointer', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text2)' }}>
                           <option value="user">일반</option>
                           <option value="admin">관리자</option>
                         </select>
-                        <button onClick={() => handleResetPassword(u.email)} className="btn btn-ghost"
+                        <button onClick={() => handleResetPassword(u.id)} className="btn btn-ghost"
                           style={{ fontSize: '0.78rem', padding: '5px 10px' }}>비밀번호 초기화</button>
-                        <button onClick={() => handleDeleteUser(u.email, u.name)} className="btn btn-danger"
+                        <button onClick={() => handleDeleteUser(u.id, u.name)} className="btn btn-danger"
                           style={{ fontSize: '0.78rem', padding: '5px 10px' }}>삭제</button>
                       </div>
                     )}
@@ -263,8 +266,10 @@ export default function AdminPage() {
             { step: '4', title: '사용자가 첫 로그인 후 비밀번호 변경', content: '로그인 페이지 → "비밀번호를 잊으셨나요?" → 이메일로 재설정 링크 발송 → 새 비밀번호 설정' }
           ].map((item, i) => (
             <div key={i} style={{
-              display: 'flex', gap: 14, marginBottom: i < 3 ? 20 : 0,
-              paddingBottom: i < 3 ? 20 : 0, borderBottom: i < 3 ? '1px solid var(--border)' : 'none'
+              display: 'flex', gap: 14,
+              marginBottom: i < 3 ? 20 : 0,
+              paddingBottom: i < 3 ? 20 : 0,
+              borderBottom: i < 3 ? '1px solid var(--border)' : 'none'
             }}>
               <div style={{
                 width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
