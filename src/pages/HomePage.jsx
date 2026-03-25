@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { getDocuments, getQuestions, CATEGORIES } from '../services/archiveService'
 
 export default function HomePage() {
-  const { user } = useAuth()
+  const { user, userInfo } = useAuth()
   const navigate = useNavigate()
   const [query, setQuery]       = useState('')
   const [recentDocs, setRecentDocs] = useState([])
@@ -28,7 +28,7 @@ export default function HomePage() {
     }
   }
 
-  const firstName = user?.displayName?.split(' ')[0] || '안녕하세요'
+  const firstName = userInfo?.name || user?.displayName?.split(' ')[0] || '직원'
 
   return (
     <div style={{ minHeight: 'calc(100vh - 60px)' }}>
