@@ -23,7 +23,7 @@ export default function UploadPage() {
   const [form, setForm] = useState({
     title: '',
     description: '',
-    category: '기타',
+    category: '엔투소프트',
     tags: ''
   })
 
