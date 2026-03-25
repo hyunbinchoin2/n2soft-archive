@@ -239,7 +239,7 @@ export async function acceptAnswer(questionId, answerId) {
 
 export const CATEGORIES = [
   '전체', '엔투소프트', '이기종 전문', '저축은행', '공공마이데이터/스크래핑',
-  '대출 정책', '개발', '디자인', '기획', '인사/총무', '기타'
+  '대출 정책', '큐피드', '개발', '디자인', '기획', '인사/총무', '기타'
 ]
 
 export async function updateDocument(docId, metadata) {
