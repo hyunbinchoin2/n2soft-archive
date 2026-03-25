@@ -11,7 +11,7 @@ import {
 export default function DocumentDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user, userInfo } = useAuth()
+  const { user, userInfo, isAdmin } = useAuth()
   const namedUser = { ...user, displayName: userInfo?.name || user?.displayName || user?.email }
 
   const [doc, setDoc]           = useState(null)
@@ -84,6 +84,7 @@ export default function DocumentDetailPage() {
   }
 
   const isOwner = user?.uid === doc?.uploader?.uid
+  const canDelete = isOwner || isAdmin
 
   if (loading) return (
     <div className="page-container">
@@ -183,12 +184,12 @@ export default function DocumentDetailPage() {
                 <span>📦 {(doc.fileSize / 1024 / 1024).toFixed(2)} MB</span>
                 <span>👤 {doc.uploader?.name}</span>
               </div>
-              {isOwner && (
+              {canDelete && (
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
                     onClick={() => setEditing(true)}
                     className="btn btn-ghost"
-                    style={{ fontSize: '0.8rem', padding: '6px 14px' }}
+                    style={{ fontSize: '0.8rem', padding: '6px 14px', display: isOwner ? undefined : 'none' }}
                   >✏️ 수정</button>
                   <button
                     onClick={handleDelete}

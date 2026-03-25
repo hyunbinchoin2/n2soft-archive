@@ -7,7 +7,7 @@ import { getQuestion, addAnswer, acceptAnswer } from '../services/archiveService
 export default function QuestionDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user, userInfo } = useAuth()
+  const { user, userInfo, isAdmin } = useAuth()
   const namedUser = { ...user, displayName: userInfo?.name || user?.displayName || user?.email }
 
   const [question, setQuestion] = useState(null)
@@ -64,6 +64,7 @@ export default function QuestionDetailPage() {
   )
 
   const isAuthor = user?.uid === question.author?.uid
+  const canDelete = isAuthor || isAdmin
 
   return (
     <div className="page-container" style={{ maxWidth: 760 }}>
