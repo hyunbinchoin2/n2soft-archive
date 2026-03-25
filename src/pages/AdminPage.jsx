@@ -1,5 +1,5 @@
 // src/pages/AdminPage.jsx
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -7,6 +7,7 @@ import {
 } from 'firebase/firestore'
 import { sendPasswordResetEmail } from 'firebase/auth'
 import { db, auth } from '../services/firebase'
+import { isOnline } from '../hooks/useOnlineStatus'
 
 export default function AdminPage() {
   const { user, isAdmin } = useAuth()
@@ -18,7 +19,7 @@ export default function AdminPage() {
   const [submitting, setSubmitting]   = useState(false)
   const [message, setMessage]         = useState(null)
   const [activeTab, setActiveTab]     = useState('users')
-  const [editingId, setEditingId]     = useState(null) // 현재 이름 수정 중인 사용자 id
+  const [editingId, setEditingId]     = useState(null)
   const [editingName, setEditingName] = useState('')
 
   const [form, setForm] = useState({ email: '', name: '', role: 'user' })
@@ -27,6 +28,13 @@ export default function AdminPage() {
     if (!isAdmin) { navigate('/'); return }
     fetchUsers()
   }, [isAdmin])
+
+  // 온라인 탭일 때 30초마다 자동 새로고침
+  useEffect(() => {
+    if (activeTab !== 'online') return
+    const interval = setInterval(fetchUsers, 30000)
+    return () => clearInterval(interval)
+  }, [activeTab])
 
   const fetchUsers = async () => {
     setLoading(true)
@@ -58,11 +66,8 @@ export default function AdminPage() {
         return
       }
       await setDoc(doc(db, 'allowedUsers', form.email), {
-        name: form.name,
-        email: form.email,
-        role: form.role,
-        createdAt: new Date().toISOString(),
-        createdBy: user.email
+        name: form.name, email: form.email, role: form.role,
+        createdAt: new Date().toISOString(), createdBy: user.email
       })
       setMessage({ type: 'success', text: `${form.name}(${form.email}) 등록 완료! Firebase Console에서 Auth 계정도 만들어주세요.` })
       setForm({ email: '', name: '', role: 'user' })
@@ -105,14 +110,12 @@ export default function AdminPage() {
     }
   }
 
-  // 이름 수정 시작
   const startEditName = (u) => {
     setEditingId(u.id)
     setEditingName(u.name || '')
     setMessage(null)
   }
 
-  // 이름 수정 저장
   const handleSaveName = async (email) => {
     if (!editingName.trim()) {
       setMessage({ type: 'error', text: '이름을 입력해주세요.' })
@@ -129,6 +132,22 @@ export default function AdminPage() {
     }
   }
 
+  const onlineUsers  = users.filter(u => isOnline(u.lastSeen))
+  const offlineUsers = users.filter(u => !isOnline(u.lastSeen))
+
+  const formatLastSeen = (lastSeen) => {
+    if (!lastSeen) return '접속 기록 없음'
+    const ts = lastSeen?.toDate ? lastSeen.toDate() : new Date(lastSeen)
+    const diff = Date.now() - ts.getTime()
+    const min  = Math.floor(diff / 60000)
+    const hour = Math.floor(diff / 3600000)
+    const day  = Math.floor(diff / 86400000)
+    if (min < 1)   return '방금 전'
+    if (min < 60)  return `${min}분 전`
+    if (hour < 24) return `${hour}시간 전`
+    return `${day}일 전`
+  }
+
   if (!isAdmin) return null
 
   return (
@@ -141,18 +160,29 @@ export default function AdminPage() {
       </div>
 
       {/* 탭 */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 24 }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 24, flexWrap: 'wrap' }}>
         {[
-          { key: 'users', label: `사용자 목록 (${users.length})` },
-          { key: 'guide', label: '신규 사용자 추가 방법' }
+          { key: 'users',  label: `사용자 목록 (${users.length})` },
+          { key: 'online', label: `온라인 현황`, badge: onlineUsers.length },
+          { key: 'guide',  label: '신규 사용자 추가 방법' }
         ].map(t => (
-          <button key={t.key} onClick={() => setActiveTab(t.key)} style={{
+          <button key={t.key} onClick={() => { setActiveTab(t.key); if (t.key === 'online') fetchUsers() }} style={{
             padding: '7px 16px', borderRadius: 8, fontSize: '0.875rem',
             fontWeight: 500, cursor: 'pointer', transition: 'all 0.15s',
+            display: 'flex', alignItems: 'center', gap: 6,
             background: activeTab === t.key ? 'var(--accent-bg)' : 'var(--surface)',
             color: activeTab === t.key ? 'var(--accent2)' : 'var(--text2)',
             border: activeTab === t.key ? '1px solid var(--accent-border)' : '1px solid var(--border)'
-          }}>{t.label}</button>
+          }}>
+            {t.label}
+            {t.badge > 0 && (
+              <span style={{
+                background: 'var(--green)', color: '#fff',
+                borderRadius: 100, padding: '1px 7px',
+                fontSize: '0.7rem', fontWeight: 700
+              }}>{t.badge}</span>
+            )}
+          </button>
         ))}
       </div>
 
@@ -167,7 +197,7 @@ export default function AdminPage() {
         }}>{message.text}</div>
       )}
 
-      {/* 사용자 목록 탭 */}
+      {/* ── 사용자 목록 탭 ── */}
       {activeTab === 'users' && (
         <>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
@@ -176,7 +206,6 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* 추가 폼 */}
           {showAddForm && (
             <div className="card" style={{ marginBottom: 20 }}>
               <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 6 }}>접근 권한 등록</h2>
@@ -215,47 +244,43 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* 사용자 목록 */}
           {loading ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {[...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 72 }} />)}
-            </div>
-          ) : users.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text3)' }}>
-              등록된 사용자가 없습니다.
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {users.map(u => (
                 <div key={u.id} className="card" style={{ padding: '16px 20px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-                    {/* 아바타 */}
-                    <div style={{
-                      width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
-                      background: u.role === 'admin' ? 'var(--amber-bg)' : 'var(--accent-bg)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontWeight: 700, fontSize: '1rem',
-                      color: u.role === 'admin' ? 'var(--amber)' : 'var(--accent2)'
-                    }}>
-                      {u.name?.[0]?.toUpperCase() || '?'}
+                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                      <div style={{
+                        width: 40, height: 40, borderRadius: '50%',
+                        background: u.role === 'admin' ? 'var(--amber-bg)' : 'var(--accent-bg)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontWeight: 700, fontSize: '1rem',
+                        color: u.role === 'admin' ? 'var(--amber)' : 'var(--accent2)'
+                      }}>
+                        {u.name?.[0]?.toUpperCase() || '?'}
+                      </div>
+                      {/* 온라인 표시 점 */}
+                      <div style={{
+                        position: 'absolute', bottom: 1, right: 1,
+                        width: 10, height: 10, borderRadius: '50%',
+                        background: isOnline(u.lastSeen) ? 'var(--green)' : 'var(--text3)',
+                        border: '2px solid var(--bg2)'
+                      }} />
                     </div>
 
-                    {/* 이름 / 이메일 */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       {editingId === u.id ? (
-                        // 이름 수정 인풋
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                          <input
-                            type="text"
-                            value={editingName}
-                            onChange={e => setEditingName(e.target.value)}
+                          <input type="text" value={editingName} onChange={e => setEditingName(e.target.value)}
                             onKeyDown={e => {
                               if (e.key === 'Enter') handleSaveName(u.id)
                               if (e.key === 'Escape') { setEditingId(null); setEditingName('') }
                             }}
-                            style={{ padding: '5px 10px', fontSize: '0.875rem', borderRadius: 6, width: 140 }}
-                            autoFocus
-                          />
+                            style={{ padding: '5px 10px', fontSize: '0.875rem', borderRadius: 6, width: 140 }} autoFocus />
                           <button onClick={() => handleSaveName(u.id)} className="btn btn-primary"
                             style={{ fontSize: '0.78rem', padding: '5px 12px' }}>저장</button>
                           <button onClick={() => { setEditingId(null); setEditingName('') }} className="btn btn-ghost"
@@ -268,38 +293,23 @@ export default function AdminPage() {
                             {u.role === 'admin' ? '관리자' : '일반'}
                           </span>
                           {u.id === user?.email && <span className="badge badge-green">나</span>}
-                          {/* 이름 수정 버튼 */}
-                          <button
-                            onClick={() => startEditName(u)}
-                            style={{
-                              fontSize: '0.75rem', color: 'var(--text3)',
-                              background: 'none', cursor: 'pointer',
-                              padding: '2px 6px', borderRadius: 4,
-                              border: '1px solid var(--border)',
-                              transition: 'all 0.15s'
-                            }}
-                            onMouseEnter={e => {
-                              e.currentTarget.style.color = 'var(--text)'
-                              e.currentTarget.style.borderColor = 'var(--border2)'
-                            }}
-                            onMouseLeave={e => {
-                              e.currentTarget.style.color = 'var(--text3)'
-                              e.currentTarget.style.borderColor = 'var(--border)'
-                            }}
+                          <button onClick={() => startEditName(u)} style={{
+                            fontSize: '0.75rem', color: 'var(--text3)', background: 'none', cursor: 'pointer',
+                            padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border)', transition: 'all 0.15s'
+                          }}
+                            onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.borderColor = 'var(--border2)' }}
+                            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text3)'; e.currentTarget.style.borderColor = 'var(--border)' }}
                           >✏️ 이름 변경</button>
                         </div>
                       )}
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text3)', marginTop: 4 }}>
-                        {u.id}
-                        {u.createdAt && (
-                          <span style={{ marginLeft: 8 }}>
-                            · {new Date(u.createdAt).toLocaleDateString('ko-KR')}
-                          </span>
-                        )}
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text3)', marginTop: 4, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        <span>{u.id}</span>
+                        <span style={{ color: isOnline(u.lastSeen) ? 'var(--green)' : 'var(--text3)' }}>
+                          {isOnline(u.lastSeen) ? '● 온라인' : `○ ${formatLastSeen(u.lastSeen)}`}
+                        </span>
                       </div>
                     </div>
 
-                    {/* 액션 버튼 (본인 제외) */}
                     {u.id !== user?.email && editingId !== u.id && (
                       <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
                         <select value={u.role} onChange={e => handleRoleChange(u.id, e.target.value)}
@@ -321,7 +331,113 @@ export default function AdminPage() {
         </>
       )}
 
-      {/* 가이드 탭 */}
+      {/* ── 온라인 현황 탭 ── */}
+      {activeTab === 'online' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text3)' }}>
+              5분 이내 활동 기준 · 30초마다 자동 갱신
+            </p>
+            <button onClick={fetchUsers} className="btn btn-ghost" style={{ fontSize: '0.8rem', padding: '6px 12px' }}>
+              🔄 새로고침
+            </button>
+          </div>
+
+          {/* 온라인 사용자 */}
+          <div style={{ marginBottom: 24 }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12
+            }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)' }} />
+              <h2 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--green)' }}>
+                온라인 {onlineUsers.length}명
+              </h2>
+            </div>
+
+            {onlineUsers.length === 0 ? (
+              <div style={{
+                padding: '20px', textAlign: 'center',
+                color: 'var(--text3)', fontSize: '0.875rem',
+                background: 'var(--surface)', borderRadius: 'var(--radius)',
+                border: '1px dashed var(--border)'
+              }}>현재 접속 중인 사용자가 없습니다</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {onlineUsers.map(u => (
+                  <div key={u.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '12px 16px',
+                    background: 'rgba(52,211,153,0.04)',
+                    border: '1px solid rgba(52,211,153,0.2)',
+                    borderRadius: 'var(--radius)'
+                  }}>
+                    <div style={{ position: 'relative' }}>
+                      <div style={{
+                        width: 40, height: 40, borderRadius: '50%',
+                        background: 'var(--green-bg)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontWeight: 700, color: 'var(--green)'
+                      }}>{u.name?.[0]?.toUpperCase() || '?'}</div>
+                      <div style={{
+                        position: 'absolute', bottom: 1, right: 1,
+                        width: 10, height: 10, borderRadius: '50%',
+                        background: 'var(--green)', border: '2px solid var(--bg2)'
+                      }} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {u.name}
+                        <span className={`badge ${u.role === 'admin' ? 'badge-amber' : 'badge-green'}`}>
+                          {u.role === 'admin' ? '관리자' : '일반'}
+                        </span>
+                        {u.id === user?.email && <span className="badge badge-blue">나</span>}
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--green)', marginTop: 2 }}>
+                        ● 접속 중 · {formatLastSeen(u.lastSeen)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 오프라인 사용자 */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--text3)' }} />
+              <h2 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text3)' }}>
+                오프라인 {offlineUsers.length}명
+              </h2>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {offlineUsers.map(u => (
+                <div key={u.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '10px 16px',
+                  background: 'var(--surface)', border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius)', opacity: 0.7
+                }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: '50%',
+                    background: 'var(--surface2)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontWeight: 700, color: 'var(--text3)', fontSize: '0.9rem'
+                  }}>{u.name?.[0]?.toUpperCase() || '?'}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 500, fontSize: '0.875rem', color: 'var(--text2)' }}>{u.name}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text3)', marginTop: 1 }}>
+                      마지막 접속: {formatLastSeen(u.lastSeen)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 가이드 탭 ── */}
       {activeTab === 'guide' && (
         <div className="card">
           <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 20 }}>신규 사용자 추가 방법</h2>
@@ -333,14 +449,12 @@ export default function AdminPage() {
           ].map((item, i) => (
             <div key={i} style={{
               display: 'flex', gap: 14,
-              marginBottom: i < 3 ? 20 : 0,
-              paddingBottom: i < 3 ? 20 : 0,
+              marginBottom: i < 3 ? 20 : 0, paddingBottom: i < 3 ? 20 : 0,
               borderBottom: i < 3 ? '1px solid var(--border)' : 'none'
             }}>
               <div style={{
                 width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                background: 'var(--accent-bg)', display: 'flex',
-                alignItems: 'center', justifyContent: 'center',
+                background: 'var(--accent-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontWeight: 700, fontSize: '0.8rem', color: 'var(--accent2)'
               }}>{item.step}</div>
               <div>

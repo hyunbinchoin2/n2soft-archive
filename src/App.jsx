@@ -1,6 +1,7 @@
 // src/App.jsx
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
+import { useOnlineStatus } from './hooks/useOnlineStatus'
 import Navbar from './components/Navbar'
 import LoginPage from './pages/LoginPage'
 import HomePage from './pages/HomePage'
@@ -43,7 +44,10 @@ function FullPageSpinner() {
 }
 
 export default function App() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user, userInfo } = useAuth()
+
+  // 로그인 중일 때 온라인 상태 추적
+  useOnlineStatus(isAuthenticated ? user : null, userInfo)
 
   return (
     <>
@@ -80,7 +84,6 @@ export default function App() {
         <Route path="/stats" element={
           <ProtectedRoute><StatsPage /></ProtectedRoute>
         } />
-
         <Route path="/admin" element={
           <AdminRoute><AdminPage /></AdminRoute>
         } />
