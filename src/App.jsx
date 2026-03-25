@@ -49,6 +49,7 @@ export default function App() {
       {isAuthenticated && <Navbar />}
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+
         <Route path="/" element={
           <ProtectedRoute><HomePage /></ProtectedRoute>
         } />
@@ -64,18 +65,23 @@ export default function App() {
         <Route path="/upload" element={
           <ProtectedRoute><UploadPage /></ProtectedRoute>
         } />
+
+        {/* QA — 반드시 /qa/ask 가 /qa/:id 보다 먼저 */}
         <Route path="/qa" element={
           <ProtectedRoute><QAPage /></ProtectedRoute>
-        } />
-        <Route path="/qa/:id" element={
-          <ProtectedRoute><QuestionDetailPage /></ProtectedRoute>
         } />
         <Route path="/qa/ask" element={
           <ProtectedRoute><AskQuestionPage /></ProtectedRoute>
         } />
+        <Route path="/qa/:id" element={
+          <ProtectedRoute><QuestionDetailPage /></ProtectedRoute>
+        } />
+
+        {/* 관리자 */}
         <Route path="/admin" element={
           <AdminRoute><AdminPage /></AdminRoute>
         } />
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>
