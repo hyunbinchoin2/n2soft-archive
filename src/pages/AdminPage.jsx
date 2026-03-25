@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
-  collection, getDocs, doc, setDoc, deleteDoc
+  collection, getDocs, doc, setDoc, deleteDoc, getDoc
 } from 'firebase/firestore'
 import { sendPasswordResetEmail } from 'firebase/auth'
 import { db, auth } from '../services/firebase'
@@ -12,12 +12,12 @@ export default function AdminPage() {
   const { user, isAdmin } = useAuth()
   const navigate = useNavigate()
 
-  const [users, setUsers]           = useState([])
-  const [loading, setLoading]       = useState(true)
+  const [users, setUsers]             = useState([])
+  const [loading, setLoading]         = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
   const [submitting, setSubmitting]   = useState(false)
   const [message, setMessage]         = useState(null)
-  const [activeTab, setActiveTab]     = useState('users') // users | guide
+  const [activeTab, setActiveTab]     = useState('users')
 
   const [form, setForm] = useState({ email: '', name: '', role: 'user' })
 
@@ -30,28 +30,28 @@ export default function AdminPage() {
     setLoading(true)
     try {
       const snap = await getDocs(collection(db, 'allowedUsers'))
-      setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      console.log('Fetched users:', list)
+      setUsers(list)
+    } catch (err) {
+      console.error('fetchUsers error:', err)
     } finally {
       setLoading(false)
     }
   }
 
-  // allowedUsers에만 등록 (Firebase Auth 계정은 별도 안내)
   const handleAddUser = async (e) => {
     e.preventDefault()
     if (!form.email || !form.name) return
     setSubmitting(true)
     setMessage(null)
-
     try {
-      // 이미 등록된 이메일인지 확인
       const existing = users.find(u => u.email === form.email)
       if (existing) {
         setMessage({ type: 'error', text: '이미 등록된 이메일입니다.' })
         setSubmitting(false)
         return
       }
-
       await setDoc(doc(db, 'allowedUsers', form.email), {
         name: form.name,
         email: form.email,
@@ -59,16 +59,13 @@ export default function AdminPage() {
         createdAt: new Date().toISOString(),
         createdBy: user.email
       })
-
-      setMessage({
-        type: 'success',
-        text: `${form.name}(${form.email}) 등록 완료! Firebase Console에서 해당 이메일로 Auth 계정도 만들어주세요.`
-      })
+      setMessage({ type: 'success', text: `${form.name}(${form.email}) 등록 완료! Firebase Console에서 Auth 계정도 만들어주세요.` })
       setForm({ email: '', name: '', role: 'user' })
       setShowAddForm(false)
       fetchUsers()
     } catch (err) {
-      setMessage({ type: 'error', text: '등록 중 오류가 발생했습니다.' })
+      console.error('handleAddUser error:', err)
+      setMessage({ type: 'error', text: `등록 오류: ${err.message}` })
     } finally {
       setSubmitting(false)
     }
@@ -78,19 +75,33 @@ export default function AdminPage() {
     try {
       await sendPasswordResetEmail(auth, email)
       setMessage({ type: 'success', text: `${email}로 비밀번호 재설정 이메일을 발송했습니다.` })
-    } catch {
-      setMessage({ type: 'error', text: '이메일 발송에 실패했습니다. Firebase Console에서 직접 초기화해주세요.' })
+    } catch (err) {
+      console.error('handleResetPassword error:', err)
+      setMessage({ type: 'error', text: `이메일 발송 실패: ${err.message}` })
     }
   }
 
   const handleDeleteUser = async (email, name) => {
-    if (!window.confirm(`${name}(${email}) 계정을 삭제하시겠습니까?\n로그인 권한이 제거됩니다.`)) return
+    if (!window.confirm(`${name}(${email}) 계정을 삭제하시겠습니까?`)) return
+    console.log('Deleting user:', email)
+    console.log('Current user:', user?.email)
+    console.log('Is admin:', isAdmin)
     try {
-      await deleteDoc(doc(db, 'allowedUsers', email))
+      // 삭제 전 문서 존재 확인
+      const docRef = doc(db, 'allowedUsers', email)
+      const docSnap = await getDoc(docRef)
+      console.log('Document exists:', docSnap.exists())
+      console.log('Document path:', docRef.path)
+
+      await deleteDoc(docRef)
+      console.log('Delete success!')
       setMessage({ type: 'success', text: `${name} 계정이 삭제됐습니다.` })
       fetchUsers()
-    } catch {
-      setMessage({ type: 'error', text: '삭제 중 오류가 발생했습니다.' })
+    } catch (err) {
+      console.error('handleDeleteUser error code:', err.code)
+      console.error('handleDeleteUser error message:', err.message)
+      console.error('handleDeleteUser full error:', err)
+      setMessage({ type: 'error', text: `삭제 오류 (${err.code}): ${err.message}` })
     }
   }
 
@@ -99,8 +110,9 @@ export default function AdminPage() {
       await setDoc(doc(db, 'allowedUsers', email), { role: newRole }, { merge: true })
       setMessage({ type: 'success', text: '권한이 변경됐습니다.' })
       fetchUsers()
-    } catch {
-      setMessage({ type: 'error', text: '권한 변경 중 오류가 발생했습니다.' })
+    } catch (err) {
+      console.error('handleRoleChange error:', err)
+      setMessage({ type: 'error', text: `권한 변경 오류: ${err.message}` })
     }
   }
 
@@ -108,7 +120,6 @@ export default function AdminPage() {
 
   return (
     <div className="page-container" style={{ maxWidth: 760 }}>
-      {/* 헤더 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1 style={{ fontSize: '1.6rem', fontWeight: 700, marginBottom: 4 }}>관리자 페이지</h1>
@@ -122,17 +133,13 @@ export default function AdminPage() {
           { key: 'users', label: `사용자 목록 (${users.length})` },
           { key: 'guide', label: '신규 사용자 추가 방법' }
         ].map(t => (
-          <button
-            key={t.key}
-            onClick={() => setActiveTab(t.key)}
-            style={{
-              padding: '7px 16px', borderRadius: 8, fontSize: '0.875rem',
-              fontWeight: 500, cursor: 'pointer', transition: 'all 0.15s',
-              background: activeTab === t.key ? 'var(--accent-bg)' : 'var(--surface)',
-              color: activeTab === t.key ? 'var(--accent2)' : 'var(--text2)',
-              border: activeTab === t.key ? '1px solid var(--accent-border)' : '1px solid var(--border)'
-            }}
-          >{t.label}</button>
+          <button key={t.key} onClick={() => setActiveTab(t.key)} style={{
+            padding: '7px 16px', borderRadius: 8, fontSize: '0.875rem',
+            fontWeight: 500, cursor: 'pointer', transition: 'all 0.15s',
+            background: activeTab === t.key ? 'var(--accent-bg)' : 'var(--surface)',
+            color: activeTab === t.key ? 'var(--accent2)' : 'var(--text2)',
+            border: activeTab === t.key ? '1px solid var(--accent-border)' : '1px solid var(--border)'
+          }}>{t.label}</button>
         ))}
       </div>
 
@@ -151,15 +158,11 @@ export default function AdminPage() {
       {activeTab === 'users' && (
         <>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-            <button
-              onClick={() => { setShowAddForm(v => !v); setMessage(null) }}
-              className="btn btn-primary"
-            >
+            <button onClick={() => { setShowAddForm(v => !v); setMessage(null) }} className="btn btn-primary">
               {showAddForm ? '취소' : '+ 사용자 추가'}
             </button>
           </div>
 
-          {/* 추가 폼 */}
           {showAddForm && (
             <div className="card" style={{ marginBottom: 20 }}>
               <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 6 }}>접근 권한 등록</h2>
@@ -170,34 +173,19 @@ export default function AdminPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text3)', marginBottom: 6 }}>이름 *</label>
-                    <input
-                      type="text"
-                      value={form.name}
-                      onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                      placeholder="홍길동"
-                      style={{ width: '100%', padding: '10px 14px' }}
-                      required
-                    />
+                    <input type="text" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                      placeholder="홍길동" style={{ width: '100%', padding: '10px 14px' }} required />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text3)', marginBottom: 6 }}>이메일 *</label>
-                    <input
-                      type="email"
-                      value={form.email}
-                      onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-                      placeholder="hong@example.com"
-                      style={{ width: '100%', padding: '10px 14px' }}
-                      required
-                    />
+                    <input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+                      placeholder="hong@example.com" style={{ width: '100%', padding: '10px 14px' }} required />
                   </div>
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text3)', marginBottom: 6 }}>권한</label>
-                  <select
-                    value={form.role}
-                    onChange={e => setForm(p => ({ ...p, role: e.target.value }))}
-                    style={{ padding: '10px 14px', cursor: 'pointer', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
-                  >
+                  <select value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}
+                    style={{ padding: '10px 14px', cursor: 'pointer', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}>
                     <option value="user">일반 사용자</option>
                     <option value="admin">관리자</option>
                   </select>
@@ -212,16 +200,9 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* 사용자 목록 */}
           {loading ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="skeleton" style={{ height: 72 }} />
-              ))}
-            </div>
-          ) : users.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text3)' }}>
-              등록된 사용자가 없습니다.
+              {[...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 72 }} />)}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -237,52 +218,30 @@ export default function AdminPage() {
                     }}>
                       {u.name?.[0]?.toUpperCase() || '?'}
                     </div>
-
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{u.name}</span>
                         <span className={`badge ${u.role === 'admin' ? 'badge-amber' : 'badge-blue'}`}>
                           {u.role === 'admin' ? '관리자' : '일반'}
                         </span>
-                        {u.id === user?.email && (
-                          <span className="badge badge-green">나</span>
-                        )}
+                        {u.id === user?.email && <span className="badge badge-green">나</span>}
                       </div>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text3)', marginTop: 2 }}>
                         {u.email}
-                        {u.createdAt && (
-                          <span style={{ marginLeft: 8 }}>
-                            · {new Date(u.createdAt).toLocaleDateString('ko-KR')}
-                          </span>
-                        )}
+                        {u.createdAt && <span style={{ marginLeft: 8 }}>· {new Date(u.createdAt).toLocaleDateString('ko-KR')}</span>}
                       </div>
                     </div>
-
                     {u.id !== user?.email && (
                       <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
-                        <select
-                          value={u.role}
-                          onChange={e => handleRoleChange(u.email, e.target.value)}
-                          style={{
-                            padding: '5px 10px', fontSize: '0.78rem',
-                            borderRadius: 6, cursor: 'pointer',
-                            background: 'var(--surface)', border: '1px solid var(--border)',
-                            color: 'var(--text2)'
-                          }}
-                        >
+                        <select value={u.role} onChange={e => handleRoleChange(u.email, e.target.value)}
+                          style={{ padding: '5px 10px', fontSize: '0.78rem', borderRadius: 6, cursor: 'pointer', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text2)' }}>
                           <option value="user">일반</option>
                           <option value="admin">관리자</option>
                         </select>
-                        <button
-                          onClick={() => handleResetPassword(u.email)}
-                          className="btn btn-ghost"
-                          style={{ fontSize: '0.78rem', padding: '5px 10px' }}
-                        >비밀번호 초기화</button>
-                        <button
-                          onClick={() => handleDeleteUser(u.email, u.name)}
-                          className="btn btn-danger"
-                          style={{ fontSize: '0.78rem', padding: '5px 10px' }}
-                        >삭제</button>
+                        <button onClick={() => handleResetPassword(u.email)} className="btn btn-ghost"
+                          style={{ fontSize: '0.78rem', padding: '5px 10px' }}>비밀번호 초기화</button>
+                        <button onClick={() => handleDeleteUser(u.email, u.name)} className="btn btn-danger"
+                          style={{ fontSize: '0.78rem', padding: '5px 10px' }}>삭제</button>
                       </div>
                     )}
                   </div>
@@ -293,51 +252,25 @@ export default function AdminPage() {
         </>
       )}
 
-      {/* 신규 사용자 추가 방법 가이드 탭 */}
+      {/* 가이드 탭 */}
       {activeTab === 'guide' && (
         <div className="card">
           <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 20 }}>신규 사용자 추가 방법</h2>
-
           {[
-            {
-              step: '1',
-              title: 'Firebase Console에서 Auth 계정 생성',
-              content: 'Firebase Console → Authentication → Users → "+ 사용자 추가" 클릭 → 이메일/비밀번호 입력 후 저장',
-              color: 'var(--accent2)',
-              bg: 'var(--accent-bg)'
-            },
-            {
-              step: '2',
-              title: '아카이브 관리자 페이지에서 권한 등록',
-              content: '"사용자 목록" 탭 → "+ 사용자 추가" → 동일 이메일과 이름 입력 → 권한 선택 → "권한 등록" 클릭',
-              color: 'var(--accent2)',
-              bg: 'var(--accent-bg)'
-            },
-            {
-              step: '3',
-              title: '사용자에게 초기 비밀번호 전달',
-              content: 'Firebase Console에서 설정한 초기 비밀번호를 사용자에게 직접 전달하세요. 비밀번호 초기화 이메일 발송도 가능합니다.',
-              color: 'var(--accent2)',
-              bg: 'var(--accent-bg)'
-            },
-            {
-              step: '4',
-              title: '사용자가 첫 로그인 후 비밀번호 변경',
-              content: '로그인 페이지에서 "비밀번호를 잊으셨나요?" 클릭 → 이메일로 재설정 링크 발송 → 새 비밀번호 설정',
-              color: 'var(--green)',
-              bg: 'var(--green-bg)'
-            }
+            { step: '1', title: 'Firebase Console에서 Auth 계정 생성', content: 'Firebase Console → Authentication → Users → "+ 사용자 추가" → 이메일/비밀번호 입력 후 저장' },
+            { step: '2', title: '아카이브 관리자 페이지에서 권한 등록', content: '"사용자 목록" 탭 → "+ 사용자 추가" → 동일 이메일과 이름 입력 → 권한 선택 → "권한 등록" 클릭' },
+            { step: '3', title: '사용자에게 초기 비밀번호 전달', content: 'Firebase Console에서 설정한 초기 비밀번호를 사용자에게 직접 전달하거나 비밀번호 초기화 이메일을 발송하세요.' },
+            { step: '4', title: '사용자가 첫 로그인 후 비밀번호 변경', content: '로그인 페이지 → "비밀번호를 잊으셨나요?" → 이메일로 재설정 링크 발송 → 새 비밀번호 설정' }
           ].map((item, i) => (
             <div key={i} style={{
               display: 'flex', gap: 14, marginBottom: i < 3 ? 20 : 0,
-              paddingBottom: i < 3 ? 20 : 0,
-              borderBottom: i < 3 ? '1px solid var(--border)' : 'none'
+              paddingBottom: i < 3 ? 20 : 0, borderBottom: i < 3 ? '1px solid var(--border)' : 'none'
             }}>
               <div style={{
                 width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                background: item.bg, display: 'flex',
+                background: 'var(--accent-bg)', display: 'flex',
                 alignItems: 'center', justifyContent: 'center',
-                fontWeight: 700, fontSize: '0.8rem', color: item.color
+                fontWeight: 700, fontSize: '0.8rem', color: 'var(--accent2)'
               }}>{item.step}</div>
               <div>
                 <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: 4 }}>{item.title}</div>
@@ -345,14 +278,12 @@ export default function AdminPage() {
               </div>
             </div>
           ))}
-
           <div style={{
             marginTop: 20, padding: '14px 16px',
             background: 'var(--amber-bg)', border: '1px solid rgba(251,191,36,0.2)',
-            borderRadius: 'var(--radius)', fontSize: '0.825rem',
-            color: 'var(--amber)', lineHeight: 1.6
+            borderRadius: 'var(--radius)', fontSize: '0.825rem', color: 'var(--amber)', lineHeight: 1.6
           }}>
-            ⚠️ <strong>중요:</strong> Firebase Auth 계정 생성과 아카이브 권한 등록 두 가지를 모두 해야 로그인이 가능합니다. 하나라도 빠지면 로그인이 안 됩니다.
+            ⚠️ Firebase Auth 계정 생성과 아카이브 권한 등록 두 가지를 모두 해야 로그인이 가능합니다.
           </div>
         </div>
       )}
