@@ -60,6 +60,7 @@ export default function Navbar() {
     const unsub = onSnapshot(
       query(collection(db, 'chat_global'), orderBy('createdAt', 'asc')),
       snap => {
+        console.log('[Chat] lastReadRef:', lastReadRef.current, 'initialized:', initialized)
         if (!initialized) {
           // 초기: lastReadRef 기준으로 안읽음 카운트
           const count = snap.docs.filter(d => {
