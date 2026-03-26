@@ -28,7 +28,7 @@ export default function Navbar() {
   const location   = useLocation()
   const [queryStr, setQueryStr] = useState('')
   const [showMenu, setShowMenu] = useState(false)
-  const [hasUnread, setHasUnread] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
   const isOnChatPage = location.pathname.includes('chat')
 
   const handleSearch = (e) => {
@@ -42,34 +42,30 @@ export default function Navbar() {
   useEffect(() => {
     if (!user?.email) return
 
-    // 채팅 페이지 진입 시 → 현재 방 읽음 처리 (ChatPage에서 처리하므로 여기선 dot만 끔)
+    // 채팅 페이지 진입 시 → dot 끔
     if (isOnChatPage) {
-      setHasUnread(false)
+      setUnreadCount(0)
       return
     }
 
     const lastRead = getLastRead()
     const globalLastRead = lastRead['global'] || 0
 
-    // 전체 채팅 - 마지막 읽은 시간 이후 메시지 감지
+    // 전체 채팅 - 마지막 읽은 시간 이후 메시지 개수 감지
     const globalQ = query(
       collection(db, 'chat_global'),
       orderBy('createdAt', 'desc'),
-      limit(20)
+      limit(50)
     )
 
     const unsub = onSnapshot(globalQ, snap => {
-      const hasNew = snap.docs.some(d => {
+      const count = snap.docs.filter(d => {
         const msg = d.data()
         if (msg.senderEmail === user.email) return false
         const ts = msg.createdAt?.toMillis ? msg.createdAt.toMillis() : 0
         return ts > globalLastRead
-      })
-      if (hasNew) {
-        setHasUnread(true)
-        return
-      }
-      setHasUnread(false)
+      }).length
+      setUnreadCount(count)
     })
 
     return unsub
@@ -79,10 +75,9 @@ export default function Navbar() {
   useEffect(() => {
     if (!isOnChatPage) return
     setLastRead('global')
-    setHasUnread(false)
+    setUnreadCount(0)
 
     return () => {
-      // 채팅 페이지 떠날 때 읽음 처리
       setLastRead('global')
     }
   }, [isOnChatPage])
@@ -119,19 +114,19 @@ export default function Navbar() {
           className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
           style={{ position: 'relative' }}
           onClick={() => {
-            setHasUnread(false)
+            setUnreadCount(0)
             setLastRead('global')
           }}
         >
           채팅
-          {hasUnread && !isOnChatPage && (
+          {unreadCount > 0 && !isOnChatPage && (
             <span style={{
-              position: 'absolute', top: 2, right: -2,
-              width: 7, height: 7,
-              background: 'var(--red)',
-              borderRadius: '50%',
-              border: '1.5px solid var(--bg)'
-            }} />
+              position: 'absolute', top: -2, right: -8,
+              background: 'var(--red)', color: '#fff',
+              borderRadius: 100, padding: '1px 5px',
+              fontSize: '0.65rem', fontWeight: 700,
+              minWidth: 16, textAlign: 'center', lineHeight: 1.6
+            }}>{unreadCount > 99 ? '99+' : unreadCount}</span>
           )}
         </NavLink>
 
