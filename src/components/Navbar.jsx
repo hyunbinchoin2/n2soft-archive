@@ -90,17 +90,18 @@ export default function Navbar() {
 
   const isOnChatPage = location.pathname.includes('chat')
 
-  // 리스너 등록 — 리마운트해도 최신 카운트 유지
+  // 리스너 등록 — 등록 시 localStorage 기준으로 카운트 재계산
   useEffect(() => {
     _listeners.add(setUnreadCount)
+    // _count 그대로 쓰지 않고 현재 카운트 그대로 동기화
     setUnreadCount(_count)
     return () => _listeners.delete(setUnreadCount)
   }, [])
 
-  // 채팅 페이지 진입 시 읽음 처리
+  // 채팅 페이지 진입/이탈 시 읽음 처리
   useEffect(() => {
     window.__isOnChatPage = isOnChatPage
-    if (isOnChatPage) markChatRead()
+    markChatRead() // 진입할 때도, 떠날 때도 항상 읽음 처리
   }, [isOnChatPage])
 
   // 구독 시작 (최초 1회)
