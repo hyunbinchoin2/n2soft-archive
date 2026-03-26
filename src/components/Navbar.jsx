@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore'
 import { db } from '../services/firebase'
 
-// ─── 모듈 레벨 변수 (리마운트해도 절대 초기화 안 됨) ────────────
+// ─── 모듈 레벨 변수 ─────────────────────────────────────────
 let _lastReadTime = (() => {
   try {
     const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
@@ -13,7 +13,18 @@ let _lastReadTime = (() => {
   } catch { return 0 }
 })()
 
-let _unsubscribe = null // 구독 중복 방지
+let _unsubscribe = null
+let _globalSetUnread = null
+
+// 항상 최신 값을 읽는 getter (클로저 stale 값 방지)
+function getLastReadTime() {
+  try {
+    const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
+    const stored = all['global'] || 0
+    // 메모리와 localStorage 중 더 큰 값 반환
+    return Math.max(_lastReadTime, stored)
+  } catch { return _lastReadTime }
+}
 
 function markAsRead() {
   _lastReadTime = Date.now()
@@ -24,11 +35,7 @@ function markAsRead() {
   } catch {}
 }
 
-// ─── 전역 unread 상태 (컴포넌트 간 공유) ─────────────────────────
-let _globalSetUnread = null
-
-function subscribeChat(userEmail, userName) {
-  // 이미 구독 중이면 재구독 안 함
+function subscribeChat(userEmail) {
   if (_unsubscribe) return
 
   let initialized = false
@@ -37,33 +44,31 @@ function subscribeChat(userEmail, userName) {
     query(collection(db, 'chat_global'), orderBy('createdAt', 'asc')),
     snap => {
       if (!initialized) {
-        // 초기: lastReadTime 이후 안읽은 메시지 카운트
+        const lastRead = getLastReadTime() // 매번 새로 읽음
         const count = snap.docs.filter(d => {
           const msg = d.data()
           if (msg.senderEmail === userEmail) return false
           const ts = msg.createdAt?.toMillis?.() || 0
-          return ts > _lastReadTime
+          return ts > lastRead
         }).length
         _globalSetUnread?.(count)
         initialized = true
         return
       }
 
-      // 실시간: 새 메시지만
       snap.docChanges().forEach(change => {
         if (change.type !== 'added') return
         const msg = change.doc.data()
         if (msg.senderEmail === userEmail) return
         const ts = msg.createdAt?.toMillis?.() || 0
-        if (ts <= _lastReadTime) return
+        const lastRead = getLastReadTime() // 매번 새로 읽음
+        if (ts <= lastRead) return
 
-        // 채팅 페이지면 읽음 처리
         if (window.__isOnChatPage) {
           markAsRead()
           return
         }
 
-        // 카운트 증가 + 알림
         _globalSetUnread?.(prev => prev + 1)
         if ('Notification' in window && Notification.permission === 'granted') {
           new Notification(`💬 ${msg.senderName || '알 수 없음'}`, {
