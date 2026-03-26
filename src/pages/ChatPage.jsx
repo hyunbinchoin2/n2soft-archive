@@ -106,51 +106,72 @@ export default function ChatPage() {
   }, [activeRoom])
 
   // 백그라운드 방들 안읽음 감지 (전체 채팅 + DM들)
+  const usersRef = useRef([])
+  useEffect(() => { usersRef.current = users }, [users])
+
   useEffect(() => {
-    if (!user?.email || users.length === 0) return
+    if (!user?.email) return
 
-    const unsubs = []
+    // users가 로드될 때까지 잠깐 기다렸다가 구독 시작
+    const timer = setTimeout(() => {
+      const currentUsers = usersRef.current
+      if (currentUsers.length === 0) return
 
-    // 전체 채팅 감시
-    const globalQ = query(collection(db, 'chat_global'), orderBy('createdAt', 'desc'), limit(1))
-    let globalInitial = true
-    unsubs.push(onSnapshot(globalQ, snap => {
-      if (globalInitial) { globalInitial = false; return } // 첫 스냅샷 무시
-      if (activeRoomRef.current === 'global') return
-      snap.docChanges().forEach(change => {
-        if (change.type !== 'added') return
-        const msg = change.doc.data()
-        if (msg.senderEmail === user.email) return
-        setUnread(prev => ({ ...prev, global: (prev.global || 0) + 1 }))
-        showNotification(`💬 전체 채팅 — ${msg.senderName}`, msg.text)
-      })
-    }))
+      const unsubs = []
 
-    // 각 DM 방 감시
-    users.filter(u => u.email !== user.email).forEach(peer => {
-      const roomId = getDMRoomId(user.email, peer.email)
-      const dmQ = query(
-        collection(db, `chat_dm/${roomId}/messages`),
-        orderBy('createdAt', 'desc'),
-        limit(1)
-      )
-      let dmInitial = true
-      unsubs.push(onSnapshot(dmQ, snap => {
-        if (dmInitial) { dmInitial = false; return } // 첫 스냅샷 무시
-        if (activeRoomRef.current === roomId) return
+      // 전체 채팅 감시
+      const globalQ = query(collection(db, 'chat_global'), orderBy('createdAt', 'desc'), limit(1))
+      let globalReady = false
+      unsubs.push(onSnapshot(globalQ, snap => {
+        if (!globalReady) { globalReady = true; return } // 첫 스냅샷 무시
+        if (activeRoomRef.current === 'global') return
         snap.docChanges().forEach(change => {
           if (change.type !== 'added') return
           const msg = change.doc.data()
           if (msg.senderEmail === user.email) return
-          setUnread(prev => ({ ...prev, [roomId]: (prev[roomId] || 0) + 1 }))
-          setRecentRooms(prev => [roomId, ...prev.filter(r => r !== roomId)])
-          showNotification(`💌 ${peer.name}`, msg.text)
+          const ts = msg.createdAt?.toMillis?.() || 0
+          const lastRead = (() => {
+            try { return JSON.parse(localStorage.getItem('chat_last_read') || '{}').global || 0 } catch { return 0 }
+          })()
+          if (ts <= lastRead) return
+          setUnread(prev => ({ ...prev, global: (prev.global || 0) + 1 }))
+          showNotification(`💬 전체 채팅 — ${msg.senderName}`, msg.text)
         })
       }))
-    })
 
-    return () => unsubs.forEach(u => u())
-  }, [user?.email, users])
+      // 각 DM 방 감시
+      currentUsers.filter(u => u.email !== user.email).forEach(peer => {
+        const roomId = getDMRoomId(user.email, peer.email)
+        const dmQ = query(
+          collection(db, `chat_dm/${roomId}/messages`),
+          orderBy('createdAt', 'desc'),
+          limit(1)
+        )
+        let dmReady = false
+        unsubs.push(onSnapshot(dmQ, snap => {
+          if (!dmReady) { dmReady = true; return } // 첫 스냅샷 무시
+          if (activeRoomRef.current === roomId) return
+          snap.docChanges().forEach(change => {
+            if (change.type !== 'added') return
+            const msg = change.doc.data()
+            if (msg.senderEmail === user.email) return
+            const ts = msg.createdAt?.toMillis?.() || 0
+            const lastRead = (() => {
+              try { return JSON.parse(localStorage.getItem('chat_last_read') || '{}')[roomId] || 0 } catch { return 0 }
+            })()
+            if (ts <= lastRead) return
+            setUnread(prev => ({ ...prev, [roomId]: (prev[roomId] || 0) + 1 }))
+            setRecentRooms(prev => [roomId, ...prev.filter(r => r !== roomId)])
+            showNotification(`💌 ${peer.name}`, msg.text)
+          })
+        }))
+      })
+
+      return () => unsubs.forEach(u => u())
+    }, 1000) // users 로드 대기
+
+    return () => clearTimeout(timer)
+  }, [user?.email]) // users 제거 — 재구독 방지
 
   const sendMessage = async (e) => {
     e.preventDefault()
