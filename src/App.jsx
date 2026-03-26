@@ -48,9 +48,14 @@ function FullPageSpinner() {
 }
 
 // ─── 전역 채팅 알림 훅 ────────────────────────────────────────
-function useGlobalChatNotification(user, userInfo) {
+function useGlobalChatNotification(user) {
   const location = useLocation()
-  const lastMsgId = useRef(null) // 중복 알림 방지
+  const locationRef = useRef(location.pathname)
+
+  // location 바뀌어도 ref만 업데이트 (재구독 방지)
+  useEffect(() => {
+    locationRef.current = location.pathname
+  }, [location.pathname])
 
   useEffect(() => {
     if (!user?.email) return
@@ -60,7 +65,9 @@ function useGlobalChatNotification(user, userInfo) {
       Notification.requestPermission()
     }
 
-    // 전체 채팅 실시간 감지
+    // 처음 마운트 시 기존 메시지 무시
+    let isInitialLoad = true
+
     const q = query(
       collection(db, 'chat_global'),
       orderBy('createdAt', 'desc'),
@@ -68,37 +75,37 @@ function useGlobalChatNotification(user, userInfo) {
     )
 
     const unsub = onSnapshot(q, snap => {
-      if (snap.empty) return
+      // 첫 스냅샷은 무시 (기존 메시지 added 방지)
+      if (isInitialLoad) {
+        isInitialLoad = false
+        return
+      }
 
       snap.docChanges().forEach(change => {
         if (change.type !== 'added') return
 
         const msg = change.doc.data()
-        const msgId = change.doc.id
 
-        // 중복 방지
-        if (msgId === lastMsgId.current) return
-        lastMsgId.current = msgId
-
-        // 내가 보낸 메시지는 알림 안 함
+        // 내가 보낸 메시지 무시
         if (msg.senderEmail === user.email) return
 
-        // 채팅 페이지 보고 있으면 알림 안 함
-        if (location.pathname.includes('chat')) return
+        // 채팅 페이지 보고 있으면 무시
+        if (locationRef.current.includes('chat')) return
 
         // 브라우저 알림
         if ('Notification' in window && Notification.permission === 'granted') {
           new Notification(`💬 ${msg.senderName || '알 수 없음'}`, {
             body: msg.text,
             icon: '/n2soft-archive/favicon.svg',
-            tag: 'chat-global' // 같은 tag면 기존 알림 대체
+            tag: 'chat-global'
           })
         }
       })
     })
 
     return unsub
-  }, [user?.email, location.pathname])
+  // user.email 바뀔 때만 재구독 (location 제거!)
+  }, [user?.email])
 }
 
 export default function App() {
@@ -108,7 +115,7 @@ export default function App() {
   useOnlineStatus(isAuthenticated ? user : null, userInfo)
 
   // 전역 채팅 알림
-  useGlobalChatNotification(isAuthenticated ? user : null, userInfo)
+  useGlobalChatNotification(isAuthenticated ? user : null)
 
   return (
     <>
