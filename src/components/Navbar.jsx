@@ -15,13 +15,13 @@ let _lastReadTime = (() => {
 
 let _unsubscribe = null
 let _globalSetUnread = null
+let _initialized = false // 모듈 레벨로 이동
 
 // 항상 최신 값을 읽는 getter (클로저 stale 값 방지)
 function getLastReadTime() {
   try {
     const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
     const stored = all['global'] || 0
-    // 메모리와 localStorage 중 더 큰 값 반환
     return Math.max(_lastReadTime, stored)
   } catch { return _lastReadTime }
 }
@@ -38,13 +38,12 @@ function markAsRead() {
 function subscribeChat(userEmail) {
   if (_unsubscribe) return
 
-  let initialized = false
-
   _unsubscribe = onSnapshot(
     query(collection(db, 'chat_global'), orderBy('createdAt', 'asc')),
     snap => {
-      if (!initialized) {
-        const lastRead = getLastReadTime() // 매번 새로 읽음
+      if (!_initialized) {
+        // 초기 카운트 — localStorage 최신값 기준
+        const lastRead = getLastReadTime()
         const count = snap.docs.filter(d => {
           const msg = d.data()
           if (msg.senderEmail === userEmail) return false
@@ -52,7 +51,7 @@ function subscribeChat(userEmail) {
           return ts > lastRead
         }).length
         _globalSetUnread?.(count)
-        initialized = true
+        _initialized = true
         return
       }
 
@@ -61,11 +60,12 @@ function subscribeChat(userEmail) {
         const msg = change.doc.data()
         if (msg.senderEmail === userEmail) return
         const ts = msg.createdAt?.toMillis?.() || 0
-        const lastRead = getLastReadTime() // 매번 새로 읽음
+        const lastRead = getLastReadTime()
         if (ts <= lastRead) return
 
         if (window.__isOnChatPage) {
           markAsRead()
+          _globalSetUnread?.(0)
           return
         }
 
@@ -98,12 +98,13 @@ export default function Navbar() {
     return () => { _globalSetUnread = null }
   }, [])
 
-  // 채팅 페이지 여부를 window에 저장 (모듈 레벨 콜백에서 접근)
+  // 채팅 페이지 여부를 window에 저장
   useEffect(() => {
     window.__isOnChatPage = isOnChatPage
     if (isOnChatPage) {
       markAsRead()
       setUnreadCount(0)
+      _globalSetUnread?.(0)
     }
   }, [isOnChatPage])
 
