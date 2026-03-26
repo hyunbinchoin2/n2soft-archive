@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore'
+import { collection, query, orderBy, onSnapshot, getDocs } from 'firebase/firestore'
 import { db } from '../services/firebase'
 
 // ─── 모듈 레벨 ───────────────────────────────────────────────────
@@ -18,6 +18,12 @@ function getLastRead() {
   } catch { return 0 }
 }
 
+function getDMLastRead(roomId) {
+  try {
+    return JSON.parse(localStorage.getItem('chat_last_read') || '{}')[roomId] || 0
+  } catch { return 0 }
+}
+
 function saveLastRead() {
   const now = Date.now()
   try {
@@ -25,6 +31,14 @@ function saveLastRead() {
     all.global = now
     localStorage.setItem('chat_last_read', JSON.stringify(all))
     console.log('[READ] saveLastRead =', now)
+  } catch {}
+}
+
+function markDMRead(roomId) {
+  try {
+    const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
+    all[roomId] = Date.now()
+    localStorage.setItem('chat_last_read', JSON.stringify(all))
   } catch {}
 }
 
@@ -41,7 +55,11 @@ export function markChatRead() {
   setCount(0)
 }
 
-function startSubscription(email) {
+function getDMRoomId(email1, email2) {
+  return [email1, email2].sort().join('__')
+}
+
+function startSubscription(email, allUsers) {
   if (_subscribed) {
     console.log('[SUB] already subscribed, skip')
     return
@@ -49,23 +67,23 @@ function startSubscription(email) {
   _subscribed = true
   console.log('[SUB] starting subscription for', email)
 
+  // ── 전체 채팅 구독 ──────────────────────────────────────────
   let isFirst = true
-
   onSnapshot(
     query(collection(db, 'chat_global'), orderBy('createdAt', 'asc')),
     snap => {
       if (isFirst) {
         isFirst = false
         const lastRead = getLastRead()
-        const msgs = snap.docs.filter(d => {
+        const count = snap.docs.filter(d => {
           const msg = d.data()
           if (msg.senderEmail === email) return false
           const ts = msg.createdAt?.toMillis?.() || 0
           console.log('[INIT] msg ts:', ts, 'lastRead:', lastRead, 'unread:', ts > lastRead)
           return ts > lastRead
-        })
-        console.log('[INIT] initial unread count =', msgs.length)
-        setCount(msgs.length)
+        }).length
+        console.log('[INIT] initial unread count =', count)
+        setCount(c => c + count)
         return
       }
 
@@ -93,6 +111,51 @@ function startSubscription(email) {
       })
     }
   )
+
+  // ── DM 구독 ────────────────────────────────────────────────
+  allUsers.filter(u => u !== email).forEach(peerEmail => {
+    const roomId = getDMRoomId(email, peerEmail)
+    let isDMFirst = true
+
+    onSnapshot(
+      query(collection(db, `chat_dm/${roomId}/messages`), orderBy('createdAt', 'asc')),
+      snap => {
+        if (isDMFirst) {
+          isDMFirst = false
+          const lastRead = getDMLastRead(roomId)
+          const count = snap.docs.filter(d => {
+            const msg = d.data()
+            if (msg.senderEmail === email) return false
+            return (msg.createdAt?.toMillis?.() || 0) > lastRead
+          }).length
+          if (count > 0) setCount(c => c + count)
+          return
+        }
+
+        snap.docChanges().forEach(change => {
+          if (change.type !== 'added') return
+          const msg = change.doc.data()
+          if (msg.senderEmail === email) return
+          const ts = msg.createdAt?.toMillis?.() || 0
+          const lastRead = getDMLastRead(roomId)
+          if (ts <= lastRead) return
+
+          if (window.__isOnChatPage) {
+            markDMRead(roomId)
+          } else {
+            setCount(prev => prev + 1)
+            if (Notification.permission === 'granted') {
+              new Notification(`💌 ${msg.senderName || ''}`, {
+                body: msg.text,
+                icon: '/n2soft-archive/favicon.svg',
+                tag: `n2soft-dm-${roomId}`
+              })
+            }
+          }
+        })
+      }
+    )
+  })
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -125,10 +188,15 @@ export default function Navbar() {
     }
   }, [isOnChatPage])
 
+  // 구독 시작 (최초 1회)
   useEffect(() => {
     if (!user?.email) return
     if (Notification.permission === 'default') Notification.requestPermission()
-    startSubscription(user.email)
+    // 사용자 목록 불러와서 DM 구독
+    getDocs(collection(db, 'allowedUsers')).then(snap => {
+      const emails = snap.docs.map(d => d.id)
+      startSubscription(user.email, emails)
+    })
   }, [user?.email])
 
   const handleSearch = (e) => {
