@@ -68,7 +68,7 @@ export default function Navbar() {
         <NavLink to="/qa" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>Q&A</NavLink>
         <NavLink to="/stats" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>통계</NavLink>
 
-        {/* 채팅 — 안읽은 메시지 뱃지 */}
+        {/* 채팅 — 안읽은 메시지 빨간 점 */}
         <NavLink to="/chat" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
           style={{ position: 'relative' }}
           onClick={() => setChatUnread(0)}
@@ -76,12 +76,12 @@ export default function Navbar() {
           채팅
           {chatUnread > 0 && (
             <span style={{
-              position: 'absolute', top: -4, right: -6,
-              background: 'var(--red)', color: '#fff',
-              borderRadius: 100, padding: '1px 5px',
-              fontSize: '0.65rem', fontWeight: 700,
-              minWidth: 16, textAlign: 'center', lineHeight: 1.4
-            }}>{chatUnread > 99 ? '99+' : chatUnread}</span>
+              position: 'absolute', top: 2, right: -2,
+              width: 7, height: 7,
+              background: 'var(--red)',
+              borderRadius: '50%',
+              border: '1.5px solid var(--bg)'
+            }} />
           )}
         </NavLink>
 
