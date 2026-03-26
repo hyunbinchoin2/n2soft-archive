@@ -75,7 +75,7 @@ function startSubscription(email, allUsers) {
     return
   }
   _subscribed = true
-  console.log('[SUB] starting subscription for', email)
+  console.log('[SUB] starting subscription for', email, 'allUsers:', allUsers)
 
   // ── 전체 채팅 구독 ──────────────────────────────────────────
   let isFirst = true
@@ -123,10 +123,12 @@ function startSubscription(email, allUsers) {
   )
 
   // ── DM 구독 ────────────────────────────────────────────────
-  allUsers.filter(u => u !== email).forEach(peerEmail => {
+  const peers = allUsers.filter(u => u !== email)
+  console.log('[DM] subscribing to', peers.length, 'DM rooms:', peers)
+  peers.forEach(peerEmail => {
     const roomId = getDMRoomId(email, peerEmail)
     let isDMFirst = true
-
+    console.log('[DM] watching room:', roomId)
     onSnapshot(
       query(collection(db, `chat_dm/${roomId}/messages`), orderBy('createdAt', 'asc')),
       snap => {
@@ -148,6 +150,7 @@ function startSubscription(email, allUsers) {
           if (msg.senderEmail === email) return
           const ts = msg.createdAt?.toMillis?.() || 0
           const lastRead = getDMLastRead(roomId)
+          console.log('[DM NEW] roomId:', roomId, 'ts:', ts, 'lastRead:', lastRead, 'onChat:', window.__isOnChatPage)
           if (ts <= lastRead) return
 
           if (window.__isOnChatPage) {
