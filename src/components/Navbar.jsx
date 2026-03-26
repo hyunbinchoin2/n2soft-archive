@@ -1,216 +1,13 @@
 // src/components/Navbar.jsx
-import { useState, useEffect } from 'react'
-import { NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { useState } from 'react'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { collection, query, orderBy, onSnapshot, getDocs } from 'firebase/firestore'
-import { db } from '../services/firebase'
-
-// ─── 모듈 레벨 ───────────────────────────────────────────────────
-let _count = 0
-let _listeners = new Set()
-let _subscribed = false
-
-function getLastRead() {
-  try {
-    const v = JSON.parse(localStorage.getItem('chat_last_read') || '{}').global || 0
-    console.log('[READ] getLastRead =', v)
-    return v
-  } catch { return 0 }
-}
-
-function getDMLastRead(roomId) {
-  try {
-    return JSON.parse(localStorage.getItem('chat_last_read') || '{}')[roomId] || 0
-  } catch { return 0 }
-}
-
-function saveLastRead() {
-  const now = Date.now()
-  try {
-    const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
-    all.global = now
-    localStorage.setItem('chat_last_read', JSON.stringify(all))
-    console.log('[READ] saveLastRead =', now)
-  } catch {}
-}
-
-function markDMRead(roomId) {
-  try {
-    const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
-    all[roomId] = Date.now()
-    localStorage.setItem('chat_last_read', JSON.stringify(all))
-  } catch {}
-  setCount(0) // 카운트도 초기화
-}
-
-function setCount(val) {
-  const next = typeof val === 'function' ? val(_count) : val
-  console.log('[COUNT] setCount', _count, '->', next)
-  _count = next
-  _listeners.forEach(fn => fn(_count))
-}
-
-export function markChatRead() {
-  console.log('[READ] markChatRead called, _count before =', _count)
-  // 전체 채팅 + 모든 DM 읽음 처리
-  try {
-    const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
-    const now = Date.now()
-    // 모든 키(전체채팅 + DM)를 현재 시간으로 업데이트
-    Object.keys(all).forEach(key => { all[key] = now })
-    all.global = now
-    localStorage.setItem('chat_last_read', JSON.stringify(all))
-    console.log('[READ] saveLastRead all =', now)
-  } catch {}
-  setCount(0)
-}
-
-function getDMRoomId(email1, email2) {
-  return [email1, email2].sort().join('__')
-}
-
-function startSubscription(email, allUsers) {
-  if (_subscribed) {
-    console.log('[SUB] already subscribed, skip')
-    return
-  }
-  _subscribed = true
-  console.log('[SUB] starting subscription for', email, 'allUsers:', allUsers)
-
-  // ── 전체 채팅 구독 ──────────────────────────────────────────
-  let isFirst = true
-  onSnapshot(
-    query(collection(db, 'chat_global'), orderBy('createdAt', 'asc')),
-    snap => {
-      if (isFirst) {
-        isFirst = false
-        const lastRead = getLastRead()
-        const count = snap.docs.filter(d => {
-          const msg = d.data()
-          if (msg.senderEmail === email) return false
-          const ts = msg.createdAt?.toMillis?.() || 0
-          console.log('[INIT] msg ts:', ts, 'lastRead:', lastRead, 'unread:', ts > lastRead)
-          return ts > lastRead
-        }).length
-        console.log('[INIT] initial unread count =', count)
-        setCount(c => c + count)
-        return
-      }
-
-      snap.docChanges().forEach(change => {
-        if (change.type !== 'added') return
-        const msg = change.doc.data()
-        if (msg.senderEmail === email) return
-        const ts = msg.createdAt?.toMillis?.() || 0
-        const lastRead = getLastRead()
-        console.log('[NEW] new msg ts:', ts, 'lastRead:', lastRead, 'onChat:', window.__isOnChatPage)
-        if (ts <= lastRead) return
-
-        if (window.__isOnChatPage) {
-          markChatRead()
-        } else {
-          setCount(prev => prev + 1)
-          if (Notification.permission === 'granted') {
-            new Notification(`💬 ${msg.senderName || ''}`, {
-              body: msg.text,
-              icon: '/n2soft-archive/favicon.svg',
-              tag: 'n2soft-chat'
-            })
-          }
-        }
-      })
-    }
-  )
-
-  // ── DM 구독 ────────────────────────────────────────────────
-  const peers = allUsers.filter(u => u !== email)
-  console.log('[DM] subscribing to', peers.length, 'DM rooms:', peers)
-  peers.forEach(peerEmail => {
-    const roomId = getDMRoomId(email, peerEmail)
-    let isDMFirst = true
-    console.log('[DM] watching room:', roomId)
-    onSnapshot(
-      query(collection(db, `chat_dm/${roomId}/messages`), orderBy('createdAt', 'asc')),
-      snap => {
-        if (isDMFirst) {
-          isDMFirst = false
-          const lastRead = getDMLastRead(roomId)
-          const count = snap.docs.filter(d => {
-            const msg = d.data()
-            if (msg.senderEmail === email) return false
-            return (msg.createdAt?.toMillis?.() || 0) > lastRead
-          }).length
-          if (count > 0) setCount(c => c + count)
-          return
-        }
-
-        snap.docChanges().forEach(change => {
-          if (change.type !== 'added') return
-          const msg = change.doc.data()
-          if (msg.senderEmail === email) return
-          const ts = msg.createdAt?.toMillis?.() || 0
-          const lastRead = getDMLastRead(roomId)
-          console.log('[DM NEW] roomId:', roomId, 'ts:', ts, 'lastRead:', lastRead, 'onChat:', window.__isOnChatPage)
-          if (ts <= lastRead) return
-
-          if (window.__isOnChatPage) {
-            markDMRead(roomId)
-          } else {
-            setCount(prev => prev + 1)
-            if (Notification.permission === 'granted') {
-              new Notification(`💌 ${msg.senderName || ''}`, {
-                body: msg.text,
-                icon: '/n2soft-archive/favicon.svg',
-                tag: `n2soft-dm-${roomId}`
-              })
-            }
-          }
-        })
-      }
-    )
-  })
-}
-
-// ─────────────────────────────────────────────────────────────────
 
 export default function Navbar() {
   const { user, userInfo, logout, isAdmin } = useAuth()
   const navigate = useNavigate()
-  const location = useLocation()
   const [queryStr, setQueryStr] = useState('')
   const [showMenu, setShowMenu] = useState(false)
-  const [unreadCount, setUnreadCount] = useState(_count)
-
-  const isOnChatPage = location.pathname.includes('chat')
-
-  useEffect(() => {
-    console.log('[NAV] listener registered, _count =', _count)
-    _listeners.add(setUnreadCount)
-    setUnreadCount(_count)
-    return () => {
-      console.log('[NAV] listener removed')
-      _listeners.delete(setUnreadCount)
-    }
-  }, [])
-
-  // 채팅 페이지 진입 시에만 읽음 처리
-  useEffect(() => {
-    window.__isOnChatPage = isOnChatPage
-    if (isOnChatPage) {
-      markChatRead()
-    }
-  }, [isOnChatPage])
-
-  // 구독 시작 (최초 1회)
-  useEffect(() => {
-    if (!user?.email) return
-    if (Notification.permission === 'default') Notification.requestPermission()
-    // 사용자 목록 불러와서 DM 구독
-    getDocs(collection(db, 'allowedUsers')).then(snap => {
-      const emails = snap.docs.map(d => d.id)
-      startSubscription(user.email, emails)
-    })
-  }, [user?.email])
 
   const handleSearch = (e) => {
     e.preventDefault()
@@ -244,28 +41,6 @@ export default function Navbar() {
         <NavLink to="/upload" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>업로드</NavLink>
         <NavLink to="/qa" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>Q&A</NavLink>
         <NavLink to="/stats" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>통계</NavLink>
-
-        <NavLink
-          to="/chat"
-          className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-          style={{ position: 'relative' }}
-          onClick={markChatRead}
-        >
-          {({ isActive }) => (
-            <>
-              채팅
-              {unreadCount > 0 && !isActive && !isOnChatPage && (
-                <span style={{
-                  position: 'absolute', top: -2, right: -8,
-                  background: 'var(--red)', color: '#fff',
-                  borderRadius: 100, padding: '1px 5px',
-                  fontSize: '0.65rem', fontWeight: 700,
-                  minWidth: 16, textAlign: 'center', lineHeight: 1.6
-                }}>{unreadCount > 99 ? '99+' : unreadCount}</span>
-              )}
-            </>
-          )}
-        </NavLink>
 
         {isAdmin && (
           <NavLink to="/admin" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>관리자</NavLink>
@@ -317,3 +92,6 @@ export default function Navbar() {
     </nav>
   )
 }
+
+// 빈 export (ChatPage에서 import 하던 것 대응)
+export function markChatRead() {}
