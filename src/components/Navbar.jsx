@@ -2,105 +2,113 @@
 import { useState, useEffect, useRef } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import {
-  collection, query, orderBy, onSnapshot
-} from 'firebase/firestore'
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore'
 import { db } from '../services/firebase'
+
+// ─── 모듈 레벨 변수 (리마운트해도 절대 초기화 안 됨) ────────────
+let _lastReadTime = (() => {
+  try {
+    const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
+    return all['global'] || 0
+  } catch { return 0 }
+})()
+
+let _unsubscribe = null // 구독 중복 방지
+
+function markAsRead() {
+  _lastReadTime = Date.now()
+  try {
+    const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
+    all['global'] = _lastReadTime
+    localStorage.setItem('chat_last_read', JSON.stringify(all))
+  } catch {}
+}
+
+// ─── 전역 unread 상태 (컴포넌트 간 공유) ─────────────────────────
+let _globalSetUnread = null
+
+function subscribeChat(userEmail, userName) {
+  // 이미 구독 중이면 재구독 안 함
+  if (_unsubscribe) return
+
+  let initialized = false
+
+  _unsubscribe = onSnapshot(
+    query(collection(db, 'chat_global'), orderBy('createdAt', 'asc')),
+    snap => {
+      if (!initialized) {
+        // 초기: lastReadTime 이후 안읽은 메시지 카운트
+        const count = snap.docs.filter(d => {
+          const msg = d.data()
+          if (msg.senderEmail === userEmail) return false
+          const ts = msg.createdAt?.toMillis?.() || 0
+          return ts > _lastReadTime
+        }).length
+        _globalSetUnread?.(count)
+        initialized = true
+        return
+      }
+
+      // 실시간: 새 메시지만
+      snap.docChanges().forEach(change => {
+        if (change.type !== 'added') return
+        const msg = change.doc.data()
+        if (msg.senderEmail === userEmail) return
+        const ts = msg.createdAt?.toMillis?.() || 0
+        if (ts <= _lastReadTime) return
+
+        // 채팅 페이지면 읽음 처리
+        if (window.__isOnChatPage) {
+          markAsRead()
+          return
+        }
+
+        // 카운트 증가 + 알림
+        _globalSetUnread?.(prev => prev + 1)
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(`💬 ${msg.senderName || '알 수 없음'}`, {
+            body: msg.text,
+            icon: '/n2soft-archive/favicon.svg',
+            tag: 'n2soft-chat'
+          })
+        }
+      })
+    }
+  )
+}
 
 export default function Navbar() {
   const { user, userInfo, logout, isAdmin } = useAuth()
-  const navigate  = useNavigate()
-  const location  = useLocation()
+  const navigate = useNavigate()
+  const location = useLocation()
   const [queryStr, setQueryStr] = useState('')
   const [showMenu, setShowMenu] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
 
   const isOnChatPage = location.pathname.includes('chat')
-  const isOnChatRef  = useRef(isOnChatPage)
-  // localStorage에서 동기적으로 즉시 읽음 (비동기 타이밍 문제 제거)
-  const lastReadRef  = useRef((() => {
-    try {
-      const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
-      return all['global'] || 0
-    } catch { return 0 }
-  })())
 
+  // 전역 setter 등록
   useEffect(() => {
-    isOnChatRef.current = isOnChatPage
+    _globalSetUnread = setUnreadCount
+    return () => { _globalSetUnread = null }
+  }, [])
+
+  // 채팅 페이지 여부를 window에 저장 (모듈 레벨 콜백에서 접근)
+  useEffect(() => {
+    window.__isOnChatPage = isOnChatPage
+    if (isOnChatPage) {
+      markAsRead()
+      setUnreadCount(0)
+    }
   }, [isOnChatPage])
 
-  // 읽음 처리 — localStorage + 메모리 동시 업데이트
-  const markAsRead = () => {
-    const now = Date.now()
-    lastReadRef.current = now
-    setUnreadCount(0)
-    try {
-      const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
-      all['global'] = now
-      localStorage.setItem('chat_last_read', JSON.stringify(all))
-    } catch {}
-  }
-
-  // 채팅 페이지 진입 시 읽음 처리
-  useEffect(() => {
-    if (isOnChatPage) markAsRead()
-  }, [isOnChatPage])
-
-  // 메시지 구독 — user.email 바뀔 때만 재구독
+  // 구독 시작 (한 번만)
   useEffect(() => {
     if (!user?.email) return
-
-    // 알림 권한
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission()
     }
-
-    let initialized = false
-
-    const unsub = onSnapshot(
-      query(collection(db, 'chat_global'), orderBy('createdAt', 'asc')),
-      snap => {
-        console.log('[Chat] lastReadRef:', lastReadRef.current, 'initialized:', initialized)
-        if (!initialized) {
-          // 초기: lastReadRef 기준으로 안읽음 카운트
-          const count = snap.docs.filter(d => {
-            const msg = d.data()
-            if (msg.senderEmail === user.email) return false
-            const ts = msg.createdAt?.toMillis?.() || 0
-            return ts > lastReadRef.current
-          }).length
-          setUnreadCount(count)
-          initialized = true
-          return
-        }
-
-        // 이후: 새 메시지만
-        snap.docChanges().forEach(change => {
-          if (change.type !== 'added') return
-          const msg = change.doc.data()
-          if (msg.senderEmail === user.email) return
-          const ts = msg.createdAt?.toMillis?.() || 0
-          if (ts <= lastReadRef.current) return
-
-          if (isOnChatRef.current) {
-            // 채팅 페이지 보는 중 → 바로 읽음 처리
-            markAsRead()
-          } else {
-            // 다른 페이지 → 카운트 증가 + 알림
-            setUnreadCount(prev => prev + 1)
-            if ('Notification' in window && Notification.permission === 'granted') {
-              new Notification(`💬 ${msg.senderName || '알 수 없음'}`, {
-                body: msg.text,
-                icon: '/n2soft-archive/favicon.svg',
-                tag: 'n2soft-chat'
-              })
-            }
-          }
-        })
-      }
-    )
-
-    return unsub
+    subscribeChat(user.email, userInfo?.name || user.email)
   }, [user?.email])
 
   const handleSearch = (e) => {
@@ -140,7 +148,7 @@ export default function Navbar() {
           to="/chat"
           className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
           style={{ position: 'relative' }}
-          onClick={markAsRead}
+          onClick={() => { markAsRead(); setUnreadCount(0) }}
         >
           채팅
           {unreadCount > 0 && !isOnChatPage && (
