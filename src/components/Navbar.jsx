@@ -3,8 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
-  collection, query, orderBy, onSnapshot,
-  doc, setDoc, getDoc, serverTimestamp
+  collection, query, orderBy, onSnapshot
 } from 'firebase/firestore'
 import { db } from '../services/firebase'
 
@@ -18,39 +17,29 @@ export default function Navbar() {
 
   const isOnChatPage = location.pathname.includes('chat')
   const isOnChatRef  = useRef(isOnChatPage)
-  const lastReadRef  = useRef(0) // 메모리에서 관리
+  // localStorage에서 동기적으로 즉시 읽음 (비동기 타이밍 문제 제거)
+  const lastReadRef  = useRef((() => {
+    try {
+      const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
+      return all['global'] || 0
+    } catch { return 0 }
+  })())
 
   useEffect(() => {
     isOnChatRef.current = isOnChatPage
   }, [isOnChatPage])
 
-  // 읽음 시간 Firestore에 저장 + 메모리 업데이트
-  const markAsRead = async () => {
-    if (!user?.email) return
+  // 읽음 처리 — localStorage + 메모리 동시 업데이트
+  const markAsRead = () => {
     const now = Date.now()
     lastReadRef.current = now
     setUnreadCount(0)
     try {
-      await setDoc(
-        doc(db, 'chat_read_status', user.email.replace('@', '_').replace('.', '_')),
-        { lastReadAt: now, email: user.email },
-        { merge: true }
-      )
-    } catch (e) {
-      console.warn('markAsRead failed', e)
-    }
+      const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
+      all['global'] = now
+      localStorage.setItem('chat_last_read', JSON.stringify(all))
+    } catch {}
   }
-
-  // 앱 시작 시 Firestore에서 lastRead 불러오기
-  useEffect(() => {
-    if (!user?.email) return
-    const key = user.email.replace('@', '_').replace('.', '_')
-    getDoc(doc(db, 'chat_read_status', key)).then(snap => {
-      if (snap.exists()) {
-        lastReadRef.current = snap.data().lastReadAt || 0
-      }
-    }).catch(() => {})
-  }, [user?.email])
 
   // 채팅 페이지 진입 시 읽음 처리
   useEffect(() => {
