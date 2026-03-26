@@ -1,7 +1,10 @@
 // src/App.jsx
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect, useRef } from 'react'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
 import { useOnlineStatus } from './hooks/useOnlineStatus'
+import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore'
+import { db } from './services/firebase'
 import Navbar from './components/Navbar'
 import LoginPage from './pages/LoginPage'
 import HomePage from './pages/HomePage'
@@ -44,11 +47,68 @@ function FullPageSpinner() {
   )
 }
 
+// ─── 전역 채팅 알림 훅 ────────────────────────────────────────
+function useGlobalChatNotification(user, userInfo) {
+  const location = useLocation()
+  const lastMsgId = useRef(null) // 중복 알림 방지
+
+  useEffect(() => {
+    if (!user?.email) return
+
+    // 알림 권한 요청
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+
+    // 전체 채팅 실시간 감지
+    const q = query(
+      collection(db, 'chat_global'),
+      orderBy('createdAt', 'desc'),
+      limit(1)
+    )
+
+    const unsub = onSnapshot(q, snap => {
+      if (snap.empty) return
+
+      snap.docChanges().forEach(change => {
+        if (change.type !== 'added') return
+
+        const msg = change.doc.data()
+        const msgId = change.doc.id
+
+        // 중복 방지
+        if (msgId === lastMsgId.current) return
+        lastMsgId.current = msgId
+
+        // 내가 보낸 메시지는 알림 안 함
+        if (msg.senderEmail === user.email) return
+
+        // 채팅 페이지 보고 있으면 알림 안 함
+        if (location.pathname.includes('chat')) return
+
+        // 브라우저 알림
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(`💬 ${msg.senderName || '알 수 없음'}`, {
+            body: msg.text,
+            icon: '/n2soft-archive/favicon.svg',
+            tag: 'chat-global' // 같은 tag면 기존 알림 대체
+          })
+        }
+      })
+    })
+
+    return unsub
+  }, [user?.email, location.pathname])
+}
+
 export default function App() {
   const { isAuthenticated, user, userInfo } = useAuth()
 
-  // 로그인 중일 때 온라인 상태 추적
+  // 온라인 상태 추적
   useOnlineStatus(isAuthenticated ? user : null, userInfo)
+
+  // 전역 채팅 알림
+  useGlobalChatNotification(isAuthenticated ? user : null, userInfo)
 
   return (
     <>
