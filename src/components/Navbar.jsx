@@ -80,7 +80,6 @@ export default function Navbar() {
 
     return unsub
   }, [user?.email, isOnChatPage])
-  }, [user?.email, isOnChatPage])
 
   // 채팅 페이지 진입 시 읽음 처리
   useEffect(() => {
