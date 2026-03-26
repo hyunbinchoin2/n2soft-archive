@@ -14,6 +14,7 @@ import AskQuestionPage from './pages/AskQuestionPage'
 import DocumentDetailPage from './pages/DocumentDetailPage'
 import AdminPage from './pages/AdminPage'
 import StatsPage from './pages/StatsPage'
+import ChatPage from './pages/ChatPage'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth()
@@ -83,6 +84,9 @@ export default function App() {
 
         <Route path="/stats" element={
           <ProtectedRoute><StatsPage /></ProtectedRoute>
+        } />
+        <Route path="/chat" element={
+          <ProtectedRoute><ChatPage /></ProtectedRoute>
         } />
         <Route path="/admin" element={
           <AdminRoute><AdminPage /></AdminRoute>

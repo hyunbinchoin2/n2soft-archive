@@ -41,6 +41,7 @@ export default function Navbar() {
         <NavLink to="/upload" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>업로드</NavLink>
         <NavLink to="/qa" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>Q&A</NavLink>
         <NavLink to="/stats" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>통계</NavLink>
+        <NavLink to="/chat" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>채팅</NavLink>
         {isAdmin && (
           <NavLink to="/admin" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>관리자</NavLink>
         )}
