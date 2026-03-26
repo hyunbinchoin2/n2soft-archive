@@ -50,6 +50,26 @@ export default function ChatPage() {
   // 알림 권한 요청
   useEffect(() => { requestNotificationPermission() }, [])
 
+  // 채팅 페이지 진입 & 이탈 시 읽음 처리
+  useEffect(() => {
+    // 진입 시 읽음 처리
+    const saveRead = () => {
+      try {
+        const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
+        all['global'] = Date.now()
+        localStorage.setItem('chat_last_read', JSON.stringify(all))
+        // Navbar의 전역 변수도 동기화
+        if (window.__chatLastReadTime !== undefined) {
+          window.__chatLastReadTime = Date.now()
+        }
+      } catch {}
+    }
+    saveRead()
+
+    // 이탈 시도 읽음 처리 (cleanup)
+    return () => { saveRead() }
+  }, [])
+
   // 사용자 목록 로드
   useEffect(() => {
     getDocs(collection(db, 'allowedUsers')).then(snap => {

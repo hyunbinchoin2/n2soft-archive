@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore'
 import { db } from '../services/firebase'
 
-// ─── 전역 싱글톤 — 컴포넌트 외부에 선언해서 재마운트에도 유지 ────
+// ─── 전역 싱글톤 ────────────────────────────────────────────
 let globalLastReadTime = (() => {
   try {
     const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
@@ -15,11 +15,21 @@ let globalLastReadTime = (() => {
 
 function saveLastRead() {
   globalLastReadTime = Date.now()
+  // window에도 저장해서 ChatPage에서도 접근 가능
+  window.__chatLastReadTime = globalLastReadTime
   try {
     const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
     all['global'] = globalLastReadTime
     localStorage.setItem('chat_last_read', JSON.stringify(all))
   } catch {}
+}
+
+// ChatPage에서 업데이트한 값 반영
+function getEffectiveLastReadTime() {
+  if (window.__chatLastReadTime && window.__chatLastReadTime > globalLastReadTime) {
+    globalLastReadTime = window.__chatLastReadTime
+  }
+  return globalLastReadTime
 }
 
 export default function Navbar() {
@@ -63,11 +73,12 @@ export default function Navbar() {
     const unsub = onSnapshot(q, snap => {
       if (isInitialSnapshot) {
         // 초기 로드: lastReadTime 이후 안읽은 메시지 카운트
+        const lastRead = getEffectiveLastReadTime()
         const count = snap.docs.filter(d => {
           const msg = d.data()
           if (msg.senderEmail === user.email) return false
           const ts = msg.createdAt?.toMillis?.() || 0
-          return ts > globalLastReadTime
+          return ts > lastRead
         }).length
         setUnreadCount(count)
         isInitialSnapshot = false
@@ -81,7 +92,7 @@ export default function Navbar() {
         if (msg.senderEmail === user.email) return
 
         const ts = msg.createdAt?.toMillis?.() || 0
-        if (ts <= globalLastReadTime) return
+        if (ts <= getEffectiveLastReadTime()) return
 
         // 채팅 페이지면 읽음 처리
         if (isOnChatPageRef.current) {
