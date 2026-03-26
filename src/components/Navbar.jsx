@@ -2,17 +2,110 @@
 import { useState, useEffect, useRef } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore'
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore'
 import { db } from '../services/firebase'
+
+// ─── 전역 싱글톤 — 컴포넌트 외부에 선언해서 재마운트에도 유지 ────
+let globalLastReadTime = (() => {
+  try {
+    const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
+    return all['global'] || 0
+  } catch { return 0 }
+})()
+
+function saveLastRead() {
+  globalLastReadTime = Date.now()
+  try {
+    const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
+    all['global'] = globalLastReadTime
+    localStorage.setItem('chat_last_read', JSON.stringify(all))
+  } catch {}
+}
 
 export default function Navbar() {
   const { user, userInfo, logout, isAdmin } = useAuth()
-  const navigate   = useNavigate()
-  const location   = useLocation()
+  const navigate  = useNavigate()
+  const location  = useLocation()
   const [queryStr, setQueryStr] = useState('')
   const [showMenu, setShowMenu] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
+
   const isOnChatPage = location.pathname.includes('chat')
+  const isOnChatPageRef = useRef(isOnChatPage)
+
+  useEffect(() => {
+    isOnChatPageRef.current = isOnChatPage
+  }, [isOnChatPage])
+
+  // 채팅 페이지 진입 시 읽음 처리
+  useEffect(() => {
+    if (!isOnChatPage) return
+    saveLastRead()
+    setUnreadCount(0)
+  }, [isOnChatPage])
+
+  // 채팅 메시지 구독 — 한 번만 구독, 재마운트 없음
+  useEffect(() => {
+    if (!user?.email) return
+
+    // 알림 권한 요청
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+
+    let isInitialSnapshot = true
+
+    const q = query(
+      collection(db, 'chat_global'),
+      orderBy('createdAt', 'asc')
+    )
+
+    const unsub = onSnapshot(q, snap => {
+      if (isInitialSnapshot) {
+        // 초기 로드: lastReadTime 이후 안읽은 메시지 카운트
+        const count = snap.docs.filter(d => {
+          const msg = d.data()
+          if (msg.senderEmail === user.email) return false
+          const ts = msg.createdAt?.toMillis?.() || 0
+          return ts > globalLastReadTime
+        }).length
+        setUnreadCount(count)
+        isInitialSnapshot = false
+        return
+      }
+
+      // 실시간: 새로 추가된 메시지만 처리
+      snap.docChanges().forEach(change => {
+        if (change.type !== 'added') return
+        const msg = change.doc.data()
+        if (msg.senderEmail === user.email) return
+
+        const ts = msg.createdAt?.toMillis?.() || 0
+        if (ts <= globalLastReadTime) return
+
+        // 채팅 페이지면 읽음 처리
+        if (isOnChatPageRef.current) {
+          saveLastRead()
+          return
+        }
+
+        // 안읽음 카운트 증가
+        setUnreadCount(prev => prev + 1)
+
+        // 브라우저 알림
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(`💬 ${msg.senderName || '알 수 없음'}`, {
+            body: msg.text,
+            icon: '/n2soft-archive/favicon.svg',
+            tag: 'n2soft-chat'
+          })
+        }
+      })
+    })
+
+    return unsub
+  // user.email 바뀔 때만 재구독
+  }, [user?.email])
 
   const handleSearch = (e) => {
     e.preventDefault()
@@ -20,77 +113,6 @@ export default function Navbar() {
   }
 
   const initial = userInfo?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'
-
-  // 채팅 안읽음 감지
-  useEffect(() => {
-    if (!user?.email) return
-
-    if (isOnChatPage) {
-      setUnreadCount(0)
-      // 채팅 페이지 진입 시 읽음 시간 저장
-      try {
-        const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
-        all['global'] = Date.now()
-        localStorage.setItem('chat_last_read', JSON.stringify(all))
-      } catch {}
-      return
-    }
-
-    // 마지막 읽은 시간
-    let lastReadTime = 0
-    try {
-      const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
-      lastReadTime = all['global'] || 0
-    } catch {}
-
-    // 처음 스냅샷은 무시 (마운트 시 기존 메시지 added 이벤트 방지)
-    let isInitialLoad = true
-
-    const q = query(
-      collection(db, 'chat_global'),
-      orderBy('createdAt', 'desc'),
-      limit(50)
-    )
-
-    const unsub = onSnapshot(q, snap => {
-      if (isInitialLoad) {
-        // 초기 로드 시 — lastReadTime 이후 메시지 수만 카운트
-        const count = snap.docs.filter(d => {
-          const msg = d.data()
-          if (msg.senderEmail === user.email) return false
-          const ts = msg.createdAt?.toMillis ? msg.createdAt.toMillis() : 0
-          return ts > lastReadTime
-        }).length
-        setUnreadCount(count)
-        isInitialLoad = false
-        return
-      }
-
-      // 이후 실시간 변경 — added 된 것만 처리
-      snap.docChanges().forEach(change => {
-        if (change.type !== 'added') return
-        const msg = change.doc.data()
-        if (msg.senderEmail === user.email) return
-        const ts = msg.createdAt?.toMillis ? msg.createdAt.toMillis() : 0
-        if (ts > lastReadTime) {
-          setUnreadCount(prev => prev + 1)
-        }
-      })
-    })
-
-    return unsub
-  }, [user?.email, isOnChatPage])
-
-  // 채팅 페이지 진입 시 읽음 처리
-  useEffect(() => {
-    if (!isOnChatPage) return
-    setUnreadCount(0)
-    try {
-      const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
-      all['global'] = Date.now()
-      localStorage.setItem('chat_last_read', JSON.stringify(all))
-    } catch {}
-  }, [isOnChatPage])
 
   return (
     <nav className="nav">
@@ -118,18 +140,14 @@ export default function Navbar() {
         <NavLink to="/qa" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>Q&A</NavLink>
         <NavLink to="/stats" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>통계</NavLink>
 
-        {/* 채팅 — 빨간 점 */}
+        {/* 채팅 — 안읽음 뱃지 */}
         <NavLink
           to="/chat"
           className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
           style={{ position: 'relative' }}
           onClick={() => {
+            saveLastRead()
             setUnreadCount(0)
-            try {
-              const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
-              all['global'] = Date.now()
-              localStorage.setItem('chat_last_read', JSON.stringify(all))
-            } catch {}
           }}
         >
           채팅
