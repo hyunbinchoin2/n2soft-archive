@@ -221,10 +221,11 @@ export default function ChatPage() {
             채팅방
           </div>
           <button
-            onClick={() => openRoom('global')}
+            onClick={() => activeRoom !== 'global' && openRoom('global')}
             style={{
               display: 'flex', alignItems: 'center', gap: 8,
-              width: '100%', padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
+              width: '100%', padding: '8px 10px', borderRadius: 8,
+              cursor: activeRoom === 'global' ? 'default' : 'pointer',
               background: activeRoom === 'global' ? 'var(--accent-bg)' : 'transparent',
               border: activeRoom === 'global' ? '1px solid var(--accent-border)' : '1px solid transparent',
               color: activeRoom === 'global' ? 'var(--accent2)' : 'var(--text2)',
@@ -266,10 +267,11 @@ export default function ChatPage() {
             return (
               <button
                 key={u.email}
-                onClick={() => openRoom(roomId, u)}
+                onClick={() => !isActive && openRoom(roomId, u)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8,
-                  width: '100%', padding: '7px 10px', borderRadius: 8, cursor: 'pointer',
+                  width: '100%', padding: '7px 10px', borderRadius: 8,
+                  cursor: isActive ? 'default' : 'pointer',
                   background: isActive ? 'var(--accent-bg)' : 'transparent',
                   border: isActive ? '1px solid var(--accent-border)' : '1px solid transparent',
                   color: isActive ? 'var(--accent2)' : 'var(--text2)',
