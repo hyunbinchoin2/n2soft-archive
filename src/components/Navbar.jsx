@@ -2,25 +2,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { collection, query, orderBy, limit, onSnapshot, where, Timestamp } from 'firebase/firestore'
+import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore'
 import { db } from '../services/firebase'
-
-const LAST_READ_KEY = 'chat_last_read' // localStorage key
-
-function getLastRead() {
-  try {
-    const raw = localStorage.getItem(LAST_READ_KEY)
-    return raw ? JSON.parse(raw) : {}
-  } catch { return {} }
-}
-
-function setLastRead(roomId) {
-  try {
-    const all = getLastRead()
-    all[roomId] = Date.now()
-    localStorage.setItem(LAST_READ_KEY, JSON.stringify(all))
-  } catch {}
-}
 
 export default function Navbar() {
   const { user, userInfo, logout, isAdmin } = useAuth()
@@ -42,44 +25,72 @@ export default function Navbar() {
   useEffect(() => {
     if (!user?.email) return
 
-    // 채팅 페이지 진입 시 → dot 끔
     if (isOnChatPage) {
       setUnreadCount(0)
+      // 채팅 페이지 진입 시 읽음 시간 저장
+      try {
+        const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
+        all['global'] = Date.now()
+        localStorage.setItem('chat_last_read', JSON.stringify(all))
+      } catch {}
       return
     }
 
-    const lastRead = getLastRead()
-    const globalLastRead = lastRead['global'] || 0
+    // 마지막 읽은 시간
+    let lastReadTime = 0
+    try {
+      const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
+      lastReadTime = all['global'] || 0
+    } catch {}
 
-    // 전체 채팅 - 마지막 읽은 시간 이후 메시지 개수 감지
-    const globalQ = query(
+    // 처음 스냅샷은 무시 (마운트 시 기존 메시지 added 이벤트 방지)
+    let isInitialLoad = true
+
+    const q = query(
       collection(db, 'chat_global'),
       orderBy('createdAt', 'desc'),
       limit(50)
     )
 
-    const unsub = onSnapshot(globalQ, snap => {
-      const count = snap.docs.filter(d => {
-        const msg = d.data()
-        if (msg.senderEmail === user.email) return false
+    const unsub = onSnapshot(q, snap => {
+      if (isInitialLoad) {
+        // 초기 로드 시 — lastReadTime 이후 메시지 수만 카운트
+        const count = snap.docs.filter(d => {
+          const msg = d.data()
+          if (msg.senderEmail === user.email) return false
+          const ts = msg.createdAt?.toMillis ? msg.createdAt.toMillis() : 0
+          return ts > lastReadTime
+        }).length
+        setUnreadCount(count)
+        isInitialLoad = false
+        return
+      }
+
+      // 이후 실시간 변경 — added 된 것만 처리
+      snap.docChanges().forEach(change => {
+        if (change.type !== 'added') return
+        const msg = change.doc.data()
+        if (msg.senderEmail === user.email) return
         const ts = msg.createdAt?.toMillis ? msg.createdAt.toMillis() : 0
-        return ts > globalLastRead
-      }).length
-      setUnreadCount(count)
+        if (ts > lastReadTime) {
+          setUnreadCount(prev => prev + 1)
+        }
+      })
     })
 
     return unsub
   }, [user?.email, isOnChatPage])
+  }, [user?.email, isOnChatPage])
 
-  // 채팅 페이지 벗어날 때 현재 시간 저장
+  // 채팅 페이지 진입 시 읽음 처리
   useEffect(() => {
     if (!isOnChatPage) return
-    setLastRead('global')
     setUnreadCount(0)
-
-    return () => {
-      setLastRead('global')
-    }
+    try {
+      const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
+      all['global'] = Date.now()
+      localStorage.setItem('chat_last_read', JSON.stringify(all))
+    } catch {}
   }, [isOnChatPage])
 
   return (
@@ -115,7 +126,11 @@ export default function Navbar() {
           style={{ position: 'relative' }}
           onClick={() => {
             setUnreadCount(0)
-            setLastRead('global')
+            try {
+              const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
+              all['global'] = Date.now()
+              localStorage.setItem('chat_last_read', JSON.stringify(all))
+            } catch {}
           }}
         >
           채팅
