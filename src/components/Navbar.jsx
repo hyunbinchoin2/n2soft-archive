@@ -5,38 +5,49 @@ import { useAuth } from '../contexts/AuthContext'
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore'
 import { db } from '../services/firebase'
 
-// ─── 모든 상태를 모듈 레벨에서 관리 ─────────────────────────────
+// ─── 모듈 레벨 ───────────────────────────────────────────────────
 let _count = 0
 let _listeners = new Set()
 let _subscribed = false
 
 function getLastRead() {
   try {
-    return JSON.parse(localStorage.getItem('chat_last_read') || '{}').global || 0
+    const v = JSON.parse(localStorage.getItem('chat_last_read') || '{}').global || 0
+    console.log('[READ] getLastRead =', v)
+    return v
   } catch { return 0 }
 }
 
 function saveLastRead() {
+  const now = Date.now()
   try {
     const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
-    all.global = Date.now()
+    all.global = now
     localStorage.setItem('chat_last_read', JSON.stringify(all))
+    console.log('[READ] saveLastRead =', now)
   } catch {}
 }
 
 function setCount(val) {
-  _count = typeof val === 'function' ? val(_count) : val
+  const next = typeof val === 'function' ? val(_count) : val
+  console.log('[COUNT] setCount', _count, '->', next)
+  _count = next
   _listeners.forEach(fn => fn(_count))
 }
 
 export function markChatRead() {
+  console.log('[READ] markChatRead called, _count before =', _count)
   saveLastRead()
   setCount(0)
 }
 
 function startSubscription(email) {
-  if (_subscribed) return
+  if (_subscribed) {
+    console.log('[SUB] already subscribed, skip')
+    return
+  }
   _subscribed = true
+  console.log('[SUB] starting subscription for', email)
 
   let isFirst = true
 
@@ -45,12 +56,16 @@ function startSubscription(email) {
     snap => {
       if (isFirst) {
         isFirst = false
-        const c = snap.docs.filter(d => {
+        const lastRead = getLastRead()
+        const msgs = snap.docs.filter(d => {
           const msg = d.data()
           if (msg.senderEmail === email) return false
-          return (msg.createdAt?.toMillis?.() || 0) > getLastRead()
-        }).length
-        setCount(c)
+          const ts = msg.createdAt?.toMillis?.() || 0
+          console.log('[INIT] msg ts:', ts, 'lastRead:', lastRead, 'unread:', ts > lastRead)
+          return ts > lastRead
+        })
+        console.log('[INIT] initial unread count =', msgs.length)
+        setCount(msgs.length)
         return
       }
 
@@ -59,7 +74,9 @@ function startSubscription(email) {
         const msg = change.doc.data()
         if (msg.senderEmail === email) return
         const ts = msg.createdAt?.toMillis?.() || 0
-        if (ts <= getLastRead()) return
+        const lastRead = getLastRead()
+        console.log('[NEW] new msg ts:', ts, 'lastRead:', lastRead, 'onChat:', window.__isOnChatPage)
+        if (ts <= lastRead) return
 
         if (window.__isOnChatPage) {
           markChatRead()
@@ -90,21 +107,22 @@ export default function Navbar() {
 
   const isOnChatPage = location.pathname.includes('chat')
 
-  // 리스너 등록 — 등록 시 localStorage 기준으로 카운트 재계산
   useEffect(() => {
+    console.log('[NAV] listener registered, _count =', _count)
     _listeners.add(setUnreadCount)
-    // _count 그대로 쓰지 않고 현재 카운트 그대로 동기화
     setUnreadCount(_count)
-    return () => _listeners.delete(setUnreadCount)
+    return () => {
+      console.log('[NAV] listener removed')
+      _listeners.delete(setUnreadCount)
+    }
   }, [])
 
-  // 채팅 페이지 진입/이탈 시 읽음 처리
   useEffect(() => {
+    console.log('[NAV] isOnChatPage changed to', isOnChatPage)
     window.__isOnChatPage = isOnChatPage
-    markChatRead() // 진입할 때도, 떠날 때도 항상 읽음 처리
+    markChatRead()
   }, [isOnChatPage])
 
-  // 구독 시작 (최초 1회)
   useEffect(() => {
     if (!user?.email) return
     if (Notification.permission === 'default') Notification.requestPermission()
