@@ -1,46 +1,91 @@
 // src/components/Navbar.jsx
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore'
+import { collection, query, orderBy, limit, onSnapshot, where, Timestamp } from 'firebase/firestore'
 import { db } from '../services/firebase'
+
+const LAST_READ_KEY = 'chat_last_read' // localStorage key
+
+function getLastRead() {
+  try {
+    const raw = localStorage.getItem(LAST_READ_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch { return {} }
+}
+
+function setLastRead(roomId) {
+  try {
+    const all = getLastRead()
+    all[roomId] = Date.now()
+    localStorage.setItem(LAST_READ_KEY, JSON.stringify(all))
+  } catch {}
+}
 
 export default function Navbar() {
   const { user, userInfo, logout, isAdmin } = useAuth()
-  const navigate  = useNavigate()
-  const location  = useLocation()
-  const [query_, setQuery] = useState('')
-  const [showMenu, setShowMenu]   = useState(false)
-  const [chatUnread, setChatUnread] = useState(0)
+  const navigate   = useNavigate()
+  const location   = useLocation()
+  const [queryStr, setQueryStr] = useState('')
+  const [showMenu, setShowMenu] = useState(false)
+  const [hasUnread, setHasUnread] = useState(false)
+  const isOnChatPage = location.pathname.includes('chat')
 
   const handleSearch = (e) => {
     e.preventDefault()
-    if (query_.trim()) navigate(`/search?q=${encodeURIComponent(query_.trim())}`)
+    if (queryStr.trim()) navigate(`/search?q=${encodeURIComponent(queryStr.trim())}`)
   }
 
   const initial = userInfo?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'
 
-  // 채팅 페이지가 아닐 때만 전체 채팅 안읽음 감지
+  // 채팅 안읽음 감지
   useEffect(() => {
-    if (!user?.email || location.pathname === '/n2soft-archive/chat' || location.pathname === '/chat') return
+    if (!user?.email) return
 
-    const q = query(collection(db, 'chat_global'), orderBy('createdAt', 'desc'), limit(5))
-    const unsub = onSnapshot(q, snap => {
-      let count = 0
-      snap.docChanges().forEach(change => {
-        if (change.type === 'added' && change.doc.data().senderEmail !== user.email) {
-          count++
-        }
+    // 채팅 페이지 진입 시 → 현재 방 읽음 처리 (ChatPage에서 처리하므로 여기선 dot만 끔)
+    if (isOnChatPage) {
+      setHasUnread(false)
+      return
+    }
+
+    const lastRead = getLastRead()
+    const globalLastRead = lastRead['global'] || 0
+
+    // 전체 채팅 - 마지막 읽은 시간 이후 메시지 감지
+    const globalQ = query(
+      collection(db, 'chat_global'),
+      orderBy('createdAt', 'desc'),
+      limit(20)
+    )
+
+    const unsub = onSnapshot(globalQ, snap => {
+      const hasNew = snap.docs.some(d => {
+        const msg = d.data()
+        if (msg.senderEmail === user.email) return false
+        const ts = msg.createdAt?.toMillis ? msg.createdAt.toMillis() : 0
+        return ts > globalLastRead
       })
-      if (count > 0) setChatUnread(prev => prev + count)
+      if (hasNew) {
+        setHasUnread(true)
+        return
+      }
+      setHasUnread(false)
     })
-    return unsub
-  }, [user?.email, location.pathname])
 
-  // 채팅 페이지 진입 시 뱃지 초기화
+    return unsub
+  }, [user?.email, isOnChatPage])
+
+  // 채팅 페이지 벗어날 때 현재 시간 저장
   useEffect(() => {
-    if (location.pathname.includes('chat')) setChatUnread(0)
-  }, [location.pathname])
+    if (!isOnChatPage) return
+    setLastRead('global')
+    setHasUnread(false)
+
+    return () => {
+      // 채팅 페이지 떠날 때 읽음 처리
+      setLastRead('global')
+    }
+  }, [isOnChatPage])
 
   return (
     <nav className="nav">
@@ -57,8 +102,8 @@ export default function Navbar() {
         <input
           type="text"
           placeholder="아카이브 검색..."
-          value={query_}
-          onChange={e => setQuery(e.target.value)}
+          value={queryStr}
+          onChange={e => setQueryStr(e.target.value)}
         />
       </form>
 
@@ -68,13 +113,18 @@ export default function Navbar() {
         <NavLink to="/qa" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>Q&A</NavLink>
         <NavLink to="/stats" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>통계</NavLink>
 
-        {/* 채팅 — 안읽은 메시지 빨간 점 */}
-        <NavLink to="/chat" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+        {/* 채팅 — 빨간 점 */}
+        <NavLink
+          to="/chat"
+          className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
           style={{ position: 'relative' }}
-          onClick={() => setChatUnread(0)}
+          onClick={() => {
+            setHasUnread(false)
+            setLastRead('global')
+          }}
         >
           채팅
-          {chatUnread > 0 && (
+          {hasUnread && !isOnChatPage && (
             <span style={{
               position: 'absolute', top: 2, right: -2,
               width: 7, height: 7,

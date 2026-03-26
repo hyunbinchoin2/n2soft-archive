@@ -70,9 +70,14 @@ export default function ChatPage() {
       setMessages(msgs)
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
 
-      // 현재 방 읽음 처리
-      setLastRead(prev => ({ ...prev, [activeRoomRef.current]: Date.now() }))
-      setUnread(prev => ({ ...prev, [activeRoomRef.current]: 0 }))
+      // 읽음 처리 — localStorage에 현재 시간 저장
+      try {
+        const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
+        all[activeRoom] = Date.now()
+        localStorage.setItem('chat_last_read', JSON.stringify(all))
+      } catch {}
+
+      setUnread(prev => ({ ...prev, [activeRoom]: 0 }))
     })
     return unsub
   }, [activeRoom])
