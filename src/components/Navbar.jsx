@@ -1,86 +1,84 @@
 // src/components/Navbar.jsx
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore'
 import { db } from '../services/firebase'
 
-// ─── 모듈 레벨 변수 ─────────────────────────────────────────
-let _lastReadTime = (() => {
+// ─── 모든 상태를 모듈 레벨에서 관리 ─────────────────────────────
+let _count = 0
+let _listeners = new Set()
+let _subscribed = false
+
+function getLastRead() {
   try {
-    const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
-    return all['global'] || 0
+    return JSON.parse(localStorage.getItem('chat_last_read') || '{}').global || 0
   } catch { return 0 }
-})()
-
-let _unsubscribe = null
-let _globalSetUnread = null
-let _initialized = false // 모듈 레벨로 이동
-
-// 항상 최신 값을 읽는 getter (클로저 stale 값 방지)
-function getLastReadTime() {
-  try {
-    const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
-    const stored = all['global'] || 0
-    return Math.max(_lastReadTime, stored)
-  } catch { return _lastReadTime }
 }
 
-function markAsRead() {
-  _lastReadTime = Date.now()
+function saveLastRead() {
   try {
     const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
-    all['global'] = _lastReadTime
+    all.global = Date.now()
     localStorage.setItem('chat_last_read', JSON.stringify(all))
   } catch {}
 }
 
-function subscribeChat(userEmail) {
-  if (_unsubscribe) return
+function setCount(val) {
+  _count = typeof val === 'function' ? val(_count) : val
+  _listeners.forEach(fn => fn(_count))
+}
 
-  _unsubscribe = onSnapshot(
+export function markChatRead() {
+  saveLastRead()
+  setCount(0)
+}
+
+function startSubscription(email) {
+  if (_subscribed) return
+  _subscribed = true
+
+  let isFirst = true
+
+  onSnapshot(
     query(collection(db, 'chat_global'), orderBy('createdAt', 'asc')),
     snap => {
-      if (!_initialized) {
-        // 초기 카운트 — localStorage 최신값 기준
-        const lastRead = getLastReadTime()
-        const count = snap.docs.filter(d => {
+      if (isFirst) {
+        isFirst = false
+        const c = snap.docs.filter(d => {
           const msg = d.data()
-          if (msg.senderEmail === userEmail) return false
-          const ts = msg.createdAt?.toMillis?.() || 0
-          return ts > lastRead
+          if (msg.senderEmail === email) return false
+          return (msg.createdAt?.toMillis?.() || 0) > getLastRead()
         }).length
-        _globalSetUnread?.(count)
-        _initialized = true
+        setCount(c)
         return
       }
 
       snap.docChanges().forEach(change => {
         if (change.type !== 'added') return
         const msg = change.doc.data()
-        if (msg.senderEmail === userEmail) return
+        if (msg.senderEmail === email) return
         const ts = msg.createdAt?.toMillis?.() || 0
-        const lastRead = getLastReadTime()
-        if (ts <= lastRead) return
+        if (ts <= getLastRead()) return
 
         if (window.__isOnChatPage) {
-          markAsRead()
-          _globalSetUnread?.(0)
-          return
-        }
-
-        _globalSetUnread?.(prev => prev + 1)
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification(`💬 ${msg.senderName || '알 수 없음'}`, {
-            body: msg.text,
-            icon: '/n2soft-archive/favicon.svg',
-            tag: 'n2soft-chat'
-          })
+          markChatRead()
+        } else {
+          setCount(prev => prev + 1)
+          if (Notification.permission === 'granted') {
+            new Notification(`💬 ${msg.senderName || ''}`, {
+              body: msg.text,
+              icon: '/n2soft-archive/favicon.svg',
+              tag: 'n2soft-chat'
+            })
+          }
         }
       })
     }
   )
 }
+
+// ─────────────────────────────────────────────────────────────────
 
 export default function Navbar() {
   const { user, userInfo, logout, isAdmin } = useAuth()
@@ -88,33 +86,28 @@ export default function Navbar() {
   const location = useLocation()
   const [queryStr, setQueryStr] = useState('')
   const [showMenu, setShowMenu] = useState(false)
-  const [unreadCount, setUnreadCount] = useState(0)
+  const [unreadCount, setUnreadCount] = useState(_count)
 
   const isOnChatPage = location.pathname.includes('chat')
 
-  // 전역 setter 등록
+  // 리스너 등록 — 리마운트해도 최신 카운트 유지
   useEffect(() => {
-    _globalSetUnread = setUnreadCount
-    return () => { _globalSetUnread = null }
+    _listeners.add(setUnreadCount)
+    setUnreadCount(_count)
+    return () => _listeners.delete(setUnreadCount)
   }, [])
 
-  // 채팅 페이지 여부를 window에 저장
+  // 채팅 페이지 진입 시 읽음 처리
   useEffect(() => {
     window.__isOnChatPage = isOnChatPage
-    if (isOnChatPage) {
-      markAsRead()
-      setUnreadCount(0)
-      _globalSetUnread?.(0)
-    }
+    if (isOnChatPage) markChatRead()
   }, [isOnChatPage])
 
-  // 구독 시작 (한 번만)
+  // 구독 시작 (최초 1회)
   useEffect(() => {
     if (!user?.email) return
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission()
-    }
-    subscribeChat(user.email, userInfo?.name || user.email)
+    if (Notification.permission === 'default') Notification.requestPermission()
+    startSubscription(user.email)
   }, [user?.email])
 
   const handleSearch = (e) => {
@@ -154,7 +147,7 @@ export default function Navbar() {
           to="/chat"
           className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
           style={{ position: 'relative' }}
-          onClick={() => { markAsRead(); setUnreadCount(0) }}
+          onClick={markChatRead}
         >
           채팅
           {unreadCount > 0 && !isOnChatPage && (
