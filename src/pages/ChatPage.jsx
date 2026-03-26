@@ -99,7 +99,9 @@ export default function ChatPage() {
     return d.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   }
 
-  const otherUsers = users.filter(u => u.email !== user.email)
+  const otherUsers = users
+    .filter(u => u.email !== user.email)
+    .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'))
   const onlineCount = otherUsers.filter(u => isOnline(u.lastSeen)).length
 
   return (
