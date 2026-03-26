@@ -149,15 +149,19 @@ export default function Navbar() {
           style={{ position: 'relative' }}
           onClick={markChatRead}
         >
-          채팅
-          {unreadCount > 0 && !isOnChatPage && (
-            <span style={{
-              position: 'absolute', top: -2, right: -8,
-              background: 'var(--red)', color: '#fff',
-              borderRadius: 100, padding: '1px 5px',
-              fontSize: '0.65rem', fontWeight: 700,
-              minWidth: 16, textAlign: 'center', lineHeight: 1.6
-            }}>{unreadCount > 99 ? '99+' : unreadCount}</span>
+          {({ isActive }) => (
+            <>
+              채팅
+              {unreadCount > 0 && !isActive && !isOnChatPage && (
+                <span style={{
+                  position: 'absolute', top: -2, right: -8,
+                  background: 'var(--red)', color: '#fff',
+                  borderRadius: 100, padding: '1px 5px',
+                  fontSize: '0.65rem', fontWeight: 700,
+                  minWidth: 16, textAlign: 'center', lineHeight: 1.6
+                }}>{unreadCount > 99 ? '99+' : unreadCount}</span>
+              )}
+            </>
           )}
         </NavLink>
 
