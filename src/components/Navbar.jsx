@@ -117,10 +117,12 @@ export default function Navbar() {
     }
   }, [])
 
+  // 채팅 페이지 진입 시에만 읽음 처리
   useEffect(() => {
-    console.log('[NAV] isOnChatPage changed to', isOnChatPage)
     window.__isOnChatPage = isOnChatPage
-    markChatRead()
+    if (isOnChatPage) {
+      markChatRead()
+    }
   }, [isOnChatPage])
 
   useEffect(() => {
