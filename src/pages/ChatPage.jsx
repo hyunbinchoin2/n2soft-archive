@@ -433,7 +433,7 @@ export default function ChatPage() {
 
                 <div style={{ maxWidth: '68%', display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start' }}>
                   {showName && (
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text3)', marginBottom: 3, paddingLeft: 2 }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text)', fontWeight: 600, marginBottom: 3, paddingLeft: 2 }}>
                       {msg.senderName}
                     </div>
                   )}
