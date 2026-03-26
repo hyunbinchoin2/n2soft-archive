@@ -113,7 +113,9 @@ export default function ChatPage() {
 
     // 전체 채팅 감시
     const globalQ = query(collection(db, 'chat_global'), orderBy('createdAt', 'desc'), limit(1))
+    let globalInitial = true
     unsubs.push(onSnapshot(globalQ, snap => {
+      if (globalInitial) { globalInitial = false; return } // 첫 스냅샷 무시
       if (activeRoomRef.current === 'global') return
       snap.docChanges().forEach(change => {
         if (change.type !== 'added') return
@@ -132,7 +134,9 @@ export default function ChatPage() {
         orderBy('createdAt', 'desc'),
         limit(1)
       )
+      let dmInitial = true
       unsubs.push(onSnapshot(dmQ, snap => {
+        if (dmInitial) { dmInitial = false; return } // 첫 스냅샷 무시
         if (activeRoomRef.current === roomId) return
         snap.docChanges().forEach(change => {
           if (change.type !== 'added') return
