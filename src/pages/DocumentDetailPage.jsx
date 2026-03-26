@@ -161,7 +161,7 @@ export default function DocumentDetailPage() {
                   {doc.title}
                 </h1>
                 {doc.description && (
-                  <p style={{ color: 'var(--text2)', lineHeight: 1.6, fontSize: '0.9rem' }}>
+                  <p style={{ color: 'var(--text2)', lineHeight: 1.6, fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>
                     {doc.description}
                   </p>
                 )}
@@ -287,7 +287,7 @@ export default function DocumentDetailPage() {
                       >삭제</button>
                     )}
                   </div>
-                  <p style={{ fontSize: '0.875rem', color: 'var(--text)', marginTop: 4, lineHeight: 1.6 }}>
+                  <p style={{ fontSize: '0.875rem', color: 'var(--text)', marginTop: 4, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
                     {c.body}
                   </p>
                 </div>
