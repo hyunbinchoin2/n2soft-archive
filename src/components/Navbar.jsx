@@ -40,6 +40,7 @@ function markDMRead(roomId) {
     all[roomId] = Date.now()
     localStorage.setItem('chat_last_read', JSON.stringify(all))
   } catch {}
+  setCount(0) // 카운트도 초기화
 }
 
 function setCount(val) {
@@ -51,7 +52,16 @@ function setCount(val) {
 
 export function markChatRead() {
   console.log('[READ] markChatRead called, _count before =', _count)
-  saveLastRead()
+  // 전체 채팅 + 모든 DM 읽음 처리
+  try {
+    const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
+    const now = Date.now()
+    // 모든 키(전체채팅 + DM)를 현재 시간으로 업데이트
+    Object.keys(all).forEach(key => { all[key] = now })
+    all.global = now
+    localStorage.setItem('chat_last_read', JSON.stringify(all))
+    console.log('[READ] saveLastRead all =', now)
+  } catch {}
   setCount(0)
 }
 

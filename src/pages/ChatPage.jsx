@@ -7,6 +7,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../services/firebase'
 import { isOnline } from '../hooks/useOnlineStatus'
+import { markChatRead } from '../components/Navbar'
 
 function getDMRoomId(email1, email2) {
   return [email1, email2].sort().join('__')
@@ -97,6 +98,8 @@ export default function ChatPage() {
         localStorage.setItem('chat_last_read', JSON.stringify(all))
       } catch {}
 
+      // Navbar 카운트 초기화
+      markChatRead()
       setUnread(prev => ({ ...prev, [activeRoom]: 0 }))
     })
     return unsub
@@ -180,6 +183,12 @@ export default function ChatPage() {
     setUnread(prev => ({ ...prev, [roomId]: 0 }))
     if (roomId !== 'global') {
       setRecentRooms(prev => [roomId, ...prev.filter(r => r !== roomId)])
+      // DM 읽음 처리 — localStorage 저장
+      try {
+        const all = JSON.parse(localStorage.getItem('chat_last_read') || '{}')
+        all[roomId] = Date.now()
+        localStorage.setItem('chat_last_read', JSON.stringify(all))
+      } catch {}
     }
   }
 
