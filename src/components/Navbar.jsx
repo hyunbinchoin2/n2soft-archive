@@ -1,20 +1,46 @@
 // src/components/Navbar.jsx
-import { useState } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore'
+import { db } from '../services/firebase'
 
 export default function Navbar() {
   const { user, userInfo, logout, isAdmin } = useAuth()
-  const navigate = useNavigate()
-  const [query, setQuery]       = useState('')
-  const [showMenu, setShowMenu] = useState(false)
+  const navigate  = useNavigate()
+  const location  = useLocation()
+  const [query_, setQuery] = useState('')
+  const [showMenu, setShowMenu]   = useState(false)
+  const [chatUnread, setChatUnread] = useState(0)
 
   const handleSearch = (e) => {
     e.preventDefault()
-    if (query.trim()) navigate(`/search?q=${encodeURIComponent(query.trim())}`)
+    if (query_.trim()) navigate(`/search?q=${encodeURIComponent(query_.trim())}`)
   }
 
   const initial = userInfo?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'
+
+  // 채팅 페이지가 아닐 때만 전체 채팅 안읽음 감지
+  useEffect(() => {
+    if (!user?.email || location.pathname === '/n2soft-archive/chat' || location.pathname === '/chat') return
+
+    const q = query(collection(db, 'chat_global'), orderBy('createdAt', 'desc'), limit(5))
+    const unsub = onSnapshot(q, snap => {
+      let count = 0
+      snap.docChanges().forEach(change => {
+        if (change.type === 'added' && change.doc.data().senderEmail !== user.email) {
+          count++
+        }
+      })
+      if (count > 0) setChatUnread(prev => prev + count)
+    })
+    return unsub
+  }, [user?.email, location.pathname])
+
+  // 채팅 페이지 진입 시 뱃지 초기화
+  useEffect(() => {
+    if (location.pathname.includes('chat')) setChatUnread(0)
+  }, [location.pathname])
 
   return (
     <nav className="nav">
@@ -31,7 +57,7 @@ export default function Navbar() {
         <input
           type="text"
           placeholder="아카이브 검색..."
-          value={query}
+          value={query_}
           onChange={e => setQuery(e.target.value)}
         />
       </form>
@@ -41,7 +67,24 @@ export default function Navbar() {
         <NavLink to="/upload" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>업로드</NavLink>
         <NavLink to="/qa" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>Q&A</NavLink>
         <NavLink to="/stats" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>통계</NavLink>
-        <NavLink to="/chat" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>채팅</NavLink>
+
+        {/* 채팅 — 안읽은 메시지 뱃지 */}
+        <NavLink to="/chat" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+          style={{ position: 'relative' }}
+          onClick={() => setChatUnread(0)}
+        >
+          채팅
+          {chatUnread > 0 && (
+            <span style={{
+              position: 'absolute', top: -4, right: -6,
+              background: 'var(--red)', color: '#fff',
+              borderRadius: 100, padding: '1px 5px',
+              fontSize: '0.65rem', fontWeight: 700,
+              minWidth: 16, textAlign: 'center', lineHeight: 1.4
+            }}>{chatUnread > 99 ? '99+' : chatUnread}</span>
+          )}
+        </NavLink>
+
         {isAdmin && (
           <NavLink to="/admin" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>관리자</NavLink>
         )}
